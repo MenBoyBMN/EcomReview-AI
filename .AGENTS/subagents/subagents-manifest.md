@@ -4,7 +4,29 @@ Tài liệu này định nghĩa các vai trò Subagent chuyên biệt có thể 
 
 ---
 
-## 1. `absa_ml_engineer` (Kỹ Sư Mô Hình & Đánh Giá NLP)
+## 1. `critic-reviewer` (Chuyên Gia Phản Biện Mã Nguồn & 7 Luật Xác Định)
+- **Tập tin đặc tả:** `.AGENTS/subagents/critic-reviewer.md`
+- **Vai trò:** Phản biện chéo độc lập, loại bỏ thiên kiến tự xác nhận, bắt lỗi `git diff`.
+- **Trách nhiệm chính:**
+  - Soi chiếu toàn bộ `git diff` trước khi merge/commit để phát hiện rò rỉ bộ nhớ, Null reference, N+1 query.
+  - Kiểm tra xem code có vi phạm nguyên tắc Minimal Diff hoặc phát sinh Scope Creep không.
+  - Kiểm định sự tuân thủ tuyệt đối 7 luật xác định (R1–R7) trong `playbook_aomua.yaml`.
+- **Môi trường hoạt động:** Toàn bộ repository (chế độ Read-Only trên `git diff`).
+
+---
+
+## 2. `codebase-explorer` (Trinh Sát Mã Nguồn & Phân Tích Call-Graph)
+- **Tập tin đặc tả:** `.AGENTS/subagents/codebase-explorer.md`
+- **Vai trò:** Khảo sát diện rộng, truy vết luồng dữ liệu E2E và bảo vệ Main Agent khỏi ngộ độc ngữ cảnh.
+- **Trách nhiệm chính:**
+  - Khảo sát các luồng dữ liệu phức tạp đi qua nhiều tầng (Database $\rightarrow$ Agent $\rightarrow$ API $\rightarrow$ UI).
+  - Đọc 20–50 file trong không gian riêng biệt, sau đó tóm tắt danh sách file/hàm cụ thể cần sửa cho Main Agent.
+  - Phân tích rủi ro phụ thuộc (Call Graph dependencies) trước khi thực hiện phẫu thuật mã nguồn.
+- **Môi trường hoạt động:** Toàn bộ repository (chế độ Read-Only).
+
+---
+
+## 3. `absa_ml_engineer` (Kỹ Sư Mô Hình & Đánh Giá NLP)
 - **Vai trò:** Xây dựng, huấn luyện và đánh giá các mô hình phân loại khía cạnh cảm xúc (ABSA).
 - **Trách nhiệm chính:**
   - Viết code pipeline cho Baseline B1 (Rule/Lexicon), B2 (TF-IDF + Logistic Regression).
@@ -15,7 +37,7 @@ Tài liệu này định nghĩa các vai trò Subagent chuyên biệt có thể 
 
 ---
 
-## 2. `agent_architect` (Kiến Trúc Sư AI Agent & Database)
+## 4. `agent_architect` (Kiến Trúc Sư AI Agent & Database)
 - **Vai trò:** Thiết kế luồng State-Graph, cấu trúc dữ liệu PostgreSQL và cơ chế phản biện Hybrid Critic.
 - **Trách nhiệm chính:**
   - Thiết kế bảng PostgreSQL 16 và các câu lệnh truy vấn Aggregator (Wilson score, không ảo giác).
@@ -26,7 +48,7 @@ Tài liệu này định nghĩa các vai trò Subagent chuyên biệt có thể 
 
 ---
 
-## 3. `fullstack_engineer` (Kỹ Sư Triển Khai Giao Diện & Docker)
+## 5. `fullstack_engineer` (Kỹ Sư Triển Khai Giao Diện & Docker)
 - **Vai trò:** Xây dựng API backend, Dashboard tương tác và đóng gói container.
 - **Trách nhiệm chính:**
   - Phát triển FastAPI endpoints phục vụ phân tích review và sinh kế hoạch.
@@ -36,7 +58,7 @@ Tài liệu này định nghĩa các vai trò Subagent chuyên biệt có thể 
 
 ---
 
-## 4. `academic_researcher` (Nghiên Cứu Viên Khoa Học & Báo Cáo)
+## 6. `academic_researcher` (Nghiên Cứu Viên Khoa Học & Báo Cáo)
 - **Vai trò:** Phụ trách chất lượng học thuật, biên soạn báo cáo 30–50 trang và slide bảo vệ.
 - **Trách nhiệm chính:**
   - Khảo cứu 15–25 công trình học thuật liên quan đến ABSA và AI Agent.

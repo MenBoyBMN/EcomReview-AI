@@ -47,7 +47,39 @@ Mọi thay đổi mã nguồn hoặc đề xuất kỹ thuật bắt buộc ph�
 
 ---
 
-## 3. Ngăn Xếp Công Nghệ (Technical Stack)
+## 3. Khung Vận Hành Tối Ưu Hóa Năng Lực Antigravity (AGY Optimization Framework)
+
+Để khai thác tối đa sức mạnh của Gemini Flash (bộ nhớ 1M-2M tokens, tốc độ siêu nhanh, Sub-agent song song, chi phí tối ưu) và loại bỏ hoàn toàn các điểm yếu mặc định (Over-engineering, Scope Creep, ngộ độc ngữ cảnh, ảo giác xác nhận), Antigravity Agent bắt buộc vận hành theo **5 Kỷ Cương Tác Chiến Phẫu Thuật**:
+
+1. **Kỷ Cương Phẫu Thuật Tối Thiểu (Minimal Diff & Anti-Over-Engineering):**
+   - Phong cách lập trình: **Bảo thủ & Phẫu thuật (Conservative & Surgical)**.
+   - Chỉ sửa đổi chính xác số dòng code, hàm số hoặc file liên quan trực tiếp đến mục tiêu của task.
+   - Tuyệt đối **không** tự ý refactor các module xung quanh, không đổi tên biến/hàm không liên quan, không tự ý bổ sung các abstraction hoặc cấu trúc chưa được yêu cầu.
+   - Ưu tiên công cụ `edit_file` với đoạn `Target` chuẩn xác từng ký tự và thụt lề; tuyệt đối tránh ghi đè toàn bộ file lớn khi chỉ cần sửa vài dòng.
+
+2. **Chiến Thuật Plan Gate 2 Bước (Chống Premature Coding):**
+   - **Bước 1 (Lock):** Khi nhận task mới hoặc phân tích bug khó, trước tiên phải phân tích luồng code, xác định danh sách file bị ảnh hưởng, vạch ra các edge cases và phác thảo giải pháp Minimal Diff. **CHƯA ĐƯỢC CHỈNH SỬA MÃ NGUỒN** khi kế hoạch chưa rõ ràng hoặc chưa đạt đồng thuận.
+   - **Bước 2 (Unlock & Execute):** Sau khi kế hoạch được xác định, tiến hành thực thi chuẩn xác theo đúng phạm vi đã định, không đi chệch hướng.
+
+3. **Vệ Sinh Ngữ Cảnh & Điều Phối Sub-Agent (Context Hygiene & Subagent Delegation):**
+   - Main Agent luôn giữ ngữ cảnh sạch tinh để duy trì khả năng suy luận logic và kiến trúc ở mức cao nhất.
+   - Khi cần khảo sát diện rộng (đọc hơn 3 file lớn hoặc trace luồng dữ liệu phức tạp E2E), **bắt buộc ủy quyền (delegate) cho Sub-agent chuyên biệt** (`codebase-explorer`). Sub-agent sẽ khảo sát 20-50 file trong bộ nhớ riêng của nó rồi chỉ trả về danh sách file/hàm cụ thể cho Main Agent.
+   - Khi đọc file, luôn dùng `StartLine` và `EndLine` hoặc công cụ tìm kiếm có phạm vi, không nạp toàn bộ file hàng nghìn dòng vào context.
+
+4. **Cơ Chế Phản Biện Chéo Độc Lập (Adversarial Critic Gate):**
+   - Tránh thiên kiến tự xác nhận ("code mình viết ra luôn đúng").
+   - Sau khi hoàn thành một cụm chức năng hoặc trước khi commit mã nguồn, triệu hồi Sub-agent `critic-reviewer` với tâm thế phản biện khắt khe độc lập:
+     - Soi chiếu toàn bộ `git diff` tìm kiếm: Null reference, rò rỉ bộ nhớ, N+1 query trong SQL, lỗi phá vỡ contract Pydantic.
+     - Kiểm định mức độ tuân thủ 7 luật xác định (R1–R7) trong tri thức miền áo mưa.
+
+5. **Quy Trình Kiểm Chứng Bắt Buộc (Verification-Driven Development - VDD):**
+   - Tuyệt đối không phán đoán hoặc giả định rằng code "chắc chắn đã chạy đúng".
+   - Sau mỗi lần can thiệp mã nguồn, bắt buộc tự chạy lệnh kiểm chứng thực tế trên Terminal (`pytest -v`, `ruff check .`, `ruff format . --check`).
+   - Với các thành phần Web/API/UI: Tự khởi chạy và kiểm tra phản hồi HTTP / giao diện thực tế trước khi bàn giao cho người dùng.
+
+---
+
+## 4. Ngăn Xếp Công Nghệ (Technical Stack)
 
 | Hạng Mục | Công Nghệ | Phiên Bản / Chi Tiết Kỹ Thuật |
 | :--- | :--- | :--- |
@@ -62,7 +94,7 @@ Mọi thay đổi mã nguồn hoặc đề xuất kỹ thuật bắt buộc ph�
 
 ---
 
-## 4. Cấu Trúc Thư Mục Chuẩn Của Dự Án
+## 5. Cấu Trúc Thư Mục Chuẩn Của Dự Án
 
 Toàn bộ mã nguồn và tài liệu tuân thủ cấu trúc sau:
 
@@ -105,7 +137,7 @@ ecomreview/
 
 ---
 
-## 5. Taxonomy 8 Khía Cạnh Đánh Giá (ABSA Taxonomy)
+## 6. Taxonomy 8 Khía Cạnh Đánh Giá (ABSA Taxonomy)
 
 Hệ thống phân loại đánh giá khách hàng theo 8 khía cạnh chuẩn mực:
 1. `WATERPROOF`: Khả năng chống thấm nước, độ kín đường may ép nhiệt, độ dày chống tràn nước.
@@ -119,22 +151,22 @@ Hệ thống phân loại đánh giá khách hàng theo 8 khía cạnh chuẩn m
 
 ---
 
-## 6. Tiêu Chuẩn Kiểm Định Trước Khi Hoàn Tất Tác Vụ
+## 7. Tiêu Chuẩn Kiểm Định Trước Khi Hoàn Tất Tác Vụ
 
 Trước khi kết thúc bất kỳ phiên làm việc nào, bắt buộc thực hiện kiểm tra:
 ```bash
 # 1. Chạy toàn bộ test tự động
-pytest -v
+pytest -v   # hoặc .venv\Scripts\pytest -v trên Windows
 
 # 2. Kiểm tra chất lượng và định dạng mã nguồn
-ruff check .
-ruff format . --check
+ruff check .               # hoặc .venv\Scripts\python -m ruff check .
+ruff format . --check      # hoặc .venv\Scripts\python -m ruff format . --check
 ```
 Tất cả các bài kiểm thử phải đạt **100% Passed** và **0 lỗi lint**.
 
 ---
 
-## 7. Quy Tắc Hành Vi & Ghi Chú Bản Quyền (Credit Note)
+## 8. Quy Tắc Hành Vi & Ghi Chú Bản Quyền (Credit Note)
 
 - **Ngôn ngữ trao đổi:** Tiếng Việt (chính xác, trọng tâm, học thuật, tôn trọng).
 - **Mã nguồn, comment, commit:** Tiếng Anh chuyên nghiệp.
