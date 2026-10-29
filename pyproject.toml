@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecomreview"
+version = "0.1.0"
+description = "EcomReview AI: Automated Vietnamese Feedback Analysis & Action Planning for SMEs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6.0",
+    "google-genai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "pandas>=2.2.0",
+    "openpyxl>=3.1.2",
+    "scikit-learn>=1.4.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.1",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "streamlit>=1.32.0",
+    "plotly>=5.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["Abount_System", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = []
+
+# CreBy: MenBoyBMN

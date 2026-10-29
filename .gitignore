@@ -1,0 +1,38 @@
+# Environment & secrets
+.env
+*.env
+
+# Raw data & sensitive assets
+data/raw/*
+!data/raw/.gitkeep
+data/cache/
+
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Model checkpoints & large binary weights
+models/*.pt
+models/*.bin
+models/*.safetensors
+
+# Logs & Traces
+results/traces/*
+!results/traces/.gitkeep
+*.log
+
+# Project reference materials
+Abount_System/
+
+# CreBy: MenBoyBMN
