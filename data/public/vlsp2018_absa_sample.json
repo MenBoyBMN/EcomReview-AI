@@ -1,0 +1,63 @@
+[
+  {
+    "id": "pub_0001",
+    "text": "Đồ ăn ngon nhưng phục vụ hơi chậm, giá cả hợp lý.",
+    "opinions": [
+      {
+        "aspect": "QUALITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "Đồ ăn ngon"
+      },
+      {
+        "aspect": "SERVICE_LOGISTICS",
+        "polarity": "negative",
+        "evidence": "phục vụ hơi chậm"
+      },
+      {
+        "aspect": "PRICE_VALUE",
+        "polarity": "positive",
+        "evidence": "giá cả hợp lý"
+      }
+    ],
+    "overall_sentiment": "positive"
+  },
+  {
+    "id": "pub_0002",
+    "text": "Không gian quán ồn ào và bí, nhân viên thái độ khó chịu.",
+    "opinions": [
+      {
+        "aspect": "PERFORMANCE_FUNCTION",
+        "polarity": "negative",
+        "evidence": "quán ồn ào và bí"
+      },
+      {
+        "aspect": "SERVICE_LOGISTICS",
+        "polarity": "negative",
+        "evidence": "nhân viên thái độ khó chịu"
+      }
+    ],
+    "overall_sentiment": "negative"
+  },
+  {
+    "id": "pub_0003",
+    "text": "Giao hàng cực nhanh, sản phẩm đẹp đúng mô tả, giá rẻ.",
+    "opinions": [
+      {
+        "aspect": "SERVICE_LOGISTICS",
+        "polarity": "positive",
+        "evidence": "Giao hàng cực nhanh"
+      },
+      {
+        "aspect": "QUALITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "sản phẩm đẹp đúng mô tả"
+      },
+      {
+        "aspect": "PRICE_VALUE",
+        "polarity": "positive",
+        "evidence": "giá rẻ"
+      }
+    ],
+    "overall_sentiment": "positive"
+  }
+]
