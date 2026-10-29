@@ -22,6 +22,12 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Build & packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
 # Model checkpoints & large binary weights
 models/*.pt
 models/*.bin
