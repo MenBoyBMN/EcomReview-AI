@@ -1,9 +1,9 @@
 """Data contracts and Pydantic schemas for the EcomReview AI pipeline."""
 
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MacroAspect(str, Enum):
@@ -29,11 +29,26 @@ class Aspect(str, Enum):
     ACCESSIBILITY_DESIGN = "ACCESSIBILITY_DESIGN"
     GENERAL = "GENERAL"
 
-    # Aliases for backward/cross-domain compatibility
-    LOGISTICS = "PACKAGING_SHIPPING"
-    SERVICE = "CUSTOMER_SERVICE"
-    ACCURACY_DESIGN = "ACCESSIBILITY_DESIGN"
 
+# Robust alias dictionary mapping legacy/common synonyms to canonical Aspect enums
+ASPECT_SYNONYMS: dict[str, Aspect] = {
+    "LOGISTICS": Aspect.PACKAGING_SHIPPING,
+    "SHIPPING": Aspect.PACKAGING_SHIPPING,
+    "PACKAGING": Aspect.PACKAGING_SHIPPING,
+    "PACKAGING_SHIPPING": Aspect.PACKAGING_SHIPPING,
+    "SERVICE": Aspect.CUSTOMER_SERVICE,
+    "CUSTOMER_SERVICE": Aspect.CUSTOMER_SERVICE,
+    "CSKH": Aspect.CUSTOMER_SERVICE,
+    "ACCURACY_DESIGN": Aspect.ACCESSIBILITY_DESIGN,
+    "DESIGN": Aspect.ACCESSIBILITY_DESIGN,
+    "ACCESSIBILITY_DESIGN": Aspect.ACCESSIBILITY_DESIGN,
+    "WATERPROOF": Aspect.WATERPROOF,
+    "MATERIAL_DURABILITY": Aspect.MATERIAL_DURABILITY,
+    "FIT_SIZE": Aspect.FIT_SIZE,
+    "COMFORT_USABILITY": Aspect.COMFORT_USABILITY,
+    "PRICE_VALUE": Aspect.PRICE_VALUE,
+    "GENERAL": Aspect.GENERAL,
+}
 
 FINE_TO_MACRO_ASPECT: dict[Aspect, MacroAspect] = {
     Aspect.WATERPROOF: MacroAspect.PERFORMANCE_FUNCTION,
@@ -62,6 +77,16 @@ class AspectOpinion(BaseModel):
     aspect: Aspect = Field(description="Aspect category being evaluated")
     polarity: Polarity = Field(description="Sentiment polarity for this aspect")
     evidence: str = Field(description="Verbatim quote from original review as evidence, 1-15 words")
+
+    @field_validator("aspect", mode="before")
+    @classmethod
+    def normalize_aspect_alias(cls, value: Any) -> Any:
+        """Coerce string aliases (e.g. LOGISTICS, SERVICE) to canonical Aspect enum."""
+        if isinstance(value, str):
+            upper_val = value.strip().upper()
+            if upper_val in ASPECT_SYNONYMS:
+                return ASPECT_SYNONYMS[upper_val]
+        return value
 
 
 class ReviewAnalysis(BaseModel):

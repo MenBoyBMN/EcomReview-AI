@@ -4,6 +4,10 @@ import csv
 import sys
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows terminal
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # Ensure src is in python path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -15,10 +19,10 @@ INTERIM_FILE = Path("data/interim/shop_reviews_anon.csv")
 
 
 def anonymize_dataset(raw_path: Path = RAW_FILE, output_path: Path = INTERIM_FILE) -> int:
-    """Read raw review CSV, remove PII, and write to interim folder.
+    """Read raw review CSV, remove PII, anonymize order_id, and write to interim folder.
 
     Expected columns in raw CSV:
-    review_id, platform, shop, product, rating, text, has_media, created_at, source
+    review_id, platform, shop, product, rating, text, has_media, created_at, source, order_id
     """
     if not raw_path.exists():
         print(f"[!] File not found: {raw_path}")
@@ -37,14 +41,18 @@ def anonymize_dataset(raw_path: Path = RAW_FILE, output_path: Path = INTERIM_FIL
             print("[!] CSV has no header.")
             return 0
 
-        # Preserve standard fields and ensure text is scrubbed
-        ignored_fields = {"user", "username", "customer_name"}
-        fieldnames = [f for f in reader.fieldnames if f.lower() not in ignored_fields]
-        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        # Remove direct PII fields like username, customer_name, and raw sku_id
+        ignored_fields = {"user", "username", "customer_name", "sku_id"}
+        target_fields = [f for f in reader.fieldnames if f.lower() not in ignored_fields]
+        writer = csv.DictWriter(outfile, fieldnames=target_fields)
         writer.writeheader()
 
-        for row in reader:
-            cleaned_row = {k: v for k, v in row.items() if k in fieldnames}
+        for idx, row in enumerate(reader, start=1):
+            cleaned_row = {k: v for k, v in row.items() if k in target_fields}
+            # Mask order_id with synthetic ordinal ID to protect real e-commerce order numbers
+            if "order_id" in cleaned_row:
+                cleaned_row["order_id"] = f"ord_{idx:04d}" if cleaned_row["order_id"] else ""
+
             if "text" in cleaned_row and cleaned_row["text"]:
                 cleaned_row["text"] = scrub_pii(cleaned_row["text"])
             writer.writerow(cleaned_row)

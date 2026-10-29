@@ -54,6 +54,24 @@ class TestSchemas:
         assert parsed.overall_sentiment == Polarity.NEG
         assert parsed.opinions[0].aspect == Aspect.FIT_SIZE
 
+    def test_aspect_alias_normalization(self):
+        """Verify that legacy/alternative aspect aliases are automatically coerced."""
+        raw_json = """
+        {
+            "overall_sentiment": "positive",
+            "opinions": [
+                {"aspect": "LOGISTICS", "polarity": "positive", "evidence": "giao nhanh"},
+                {"aspect": "SERVICE", "polarity": "positive", "evidence": "tư vấn kỹ"},
+                {"aspect": "ACCURACY_DESIGN", "polarity": "positive", "evidence": "đúng hình"}
+            ],
+            "informative": true
+        }
+        """
+        parsed = ReviewAnalysis.model_validate_json(raw_json)
+        assert parsed.opinions[0].aspect == Aspect.PACKAGING_SHIPPING
+        assert parsed.opinions[1].aspect == Aspect.CUSTOMER_SERVICE
+        assert parsed.opinions[2].aspect == Aspect.ACCESSIBILITY_DESIGN
+
     def test_action_proposal_requires_min_two_evidence(self):
         """Verify architectural invariant: action proposals must cite >= 2 evidence reviews."""
         with pytest.raises(ValidationError):
