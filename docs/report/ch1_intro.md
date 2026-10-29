@@ -18,19 +18,19 @@ Theo các nghiên cứu về hành vi người tiêu dùng trực tuyến, trên
 Mặc dù nhu cầu phân tích phản hồi là rất lớn, các doanh nghiệp SME tại Việt Nam hiện nay đang đối mặt với ba rào cản công nghệ và phương pháp luận nghiêm trọng:
 
 ### 1.2.1. Thách thức ngôn ngữ mạng xã hội tiếng Việt (Vietnamese Social Text Noise)
-Khác với văn bản chuẩn mực trong báo chí hay tài liệu học thuật, ngôn ngữ phản hồi TMĐT tại Việt Nam có độ nhiễu cực cao, đặc trưng bởi:
+Khác với văn bản chuẩn mực trong báo chí hay tài liệu học thuật, ngôn ngữ phản hồi TMĐT tại Việt Nam có độ nhiễu cực cao [1], [2], [4], đặc trưng bởi:
 - Sử dụng dày đặc từ ngữ tuổi teen (teencode), từ viết tắt không chuẩn hóa (`sp`, `đc`, `ko`, `k`, `h` thay cho *sản phẩm, được, không, giờ*).
 - Văn bản không dấu hoặc gõ sai dấu thanh do bộ gõ tiếng Việt.
 - Lạm dụng biểu tượng cảm xúc (emoji) để biểu đạt thái độ tiêu cực hoặc khen ngợi.
 - Nghệ thuật mỉa mai ngầm (sarcasm/irony), ví dụ: *"Áo chống thấm xịn xò quá, đi mưa 5 phút ướt sũng cả áo trong"*—những câu văn có bề mặt từ ngữ mang tính khen ngợi nhưng bản chất mang cực tính tiêu cực sâu sắc.
 
 ### 1.2.2. Khoảng trống "Từ Thấu Hiểu Đến Hành Động" (Insight-to-Action Gap)
-Các hệ thống Social Listening và công cụ NLP hiện có trên thị trường chủ yếu dừng lại ở bài toán Phân loại Cảm xúc Toàn văn (Document-level Sentiment Analysis)—tức chỉ dán nhãn toàn bộ bình luận là Tích cực hay Tiêu cực, hoặc đếm tần suất các từ khóa chung chung. Cách tiếp cận này để lại một khoảng trống lớn:
-- Nhà bán hàng không biết được chính xác **khía cạnh cụ thể nào** (độ chống thấm, chất vải, form dáng, dịch vụ giao hàng) đang bị chê trách.
+Các hệ thống Social Listening và công cụ NLP hiện có trên thị trường chủ yếu dừng lại ở bài toán Phân loại Cảm xúc Toàn văn (Document-level Sentiment Analysis)—tức chỉ dán nhãn toàn bộ bình luận là Tích cực hay Tiêu cực, hoặc đếm tần suất các từ khóa chung chung. Cách tiếp cận này để lại một khoảng trống lớn giữa khâu phân tích dữ liệu và ra quyết định thực chiến [14], [20]:
+- Nhà bán hàng không biết được chính xác **khía cạnh cụ thể nào** (độ chống thấm, chất vải, form dáng, dịch vụ giao hàng) đang bị chê trách [3], [5].
 - Hệ thống không có khả năng tự động đề xuất **hành động cụ thể** (Cần sửa bảng kích thước trên Shopee hay phải quay video hướng dẫn mặc áo đúng cách trên TikTok?) tương thích với nguồn lực có hạn của một shop nhỏ.
 
 ### 1.2.3. Vấn đề Ảo giác Số liệu (Hallucination) của Mô Hình Ngôn Ngữ Lớn (LLM)
-Sự trỗi dậy của các Mô hình Ngôn ngữ Lớn (như GPT-4, Gemini) mở ra tiềm năng tự động hóa việc tóm tắt và ra quyết định. Tuy nhiên, khi áp dụng trực tiếp theo phương pháp Single-Prompt (hỏi một câu để LLM trả lời tất cả), các mô hình này bộc lộ điểm yếu chết người: **tự bịa số liệu thống kê**. LLM có thể dễ dàng viết: *"Có 65% khách hàng phàn nàn về đường may"* mà hoàn toàn không có bất kỳ truy vấn cơ sở dữ liệu thực tế nào hỗ trợ. Trong môi trường kinh doanh thực chiến, việc ra quyết định nhập hàng hay đổi nhà xưởng dựa trên số liệu "ảo" có thể dẫn đến thiệt hại tài chính nghiêm trọng.
+Sự trỗi dậy của các Mô hình Ngôn ngữ Lớn (như GPT-4, Gemini) mở ra tiềm năng tự động hóa việc tóm tắt và ra quyết định [7], [8]. Tuy nhiên, khi áp dụng trực tiếp theo phương pháp Single-Prompt (hỏi một câu để LLM trả lời tất cả), các mô hình này bộc lộ điểm yếu chết người: **tự bịa số liệu thống kê (hallucination)** và thiếu khả năng tự phản biện nghiêm ngặt [10], [17]. LLM có thể dễ dàng viết: *"Có 65% khách hàng phàn nàn về đường may"* mà hoàn toàn không có bất kỳ truy vấn cơ sở dữ liệu thực tế nào hỗ trợ. Trong môi trường kinh doanh thực chiến, việc ra quyết định nhập hàng hay đổi nhà xưởng dựa trên số liệu "ảo" có thể dẫn đến thiệt hại tài chính nghiêm trọng.
 
 ---
 

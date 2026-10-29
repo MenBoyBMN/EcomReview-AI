@@ -5,7 +5,8 @@
 # Raw data & sensitive assets
 data/raw/*
 !data/raw/.gitkeep
-data/cache/
+data/cache/*
+!data/cache/.gitkeep
 
 # Python Virtual Environment
 .venv/
@@ -32,6 +33,9 @@ dist/
 models/*.pt
 models/*.bin
 models/*.safetensors
+models/*.joblib
+models/*.onnx
+!models/.gitkeep
 
 # Logs & Traces
 results/traces/*
@@ -40,5 +44,9 @@ results/traces/*
 
 # Project reference materials
 Abount_System/
+
+# Temporary office and editor locks
+~$*
+*.tmp
 
 # CreBy: MenBoyBMN
