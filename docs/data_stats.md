@@ -1,7 +1,7 @@
 # Báo Cáo Thống Kê Khám Phá Dữ Liệu (Exploratory Data Analysis - EDA)
 
 > **Dự án:** EcomReview AI — Nghiên cứu ABSA & Tối ưu hóa Thương mại Điện tử
-> **Cập nhật:** Tuần 1 · Đã nạp dữ liệu thực tế TikTok Shop
+> **Cập nhật:** Tuần 2 · Đã bổ sung phân tích cờ nhiễu mạng xã hội
 
 ---
 
@@ -42,5 +42,18 @@
   1. Review có độ dài trung bình chứa nhiều phản hồi chi tiết về chất liệu da cá, độ mềm, và chống thấm nước.
   2. Xuất hiện các review mỉa mai ngầm và đánh giá đa khía cạnh (khen giao hàng nhưng chê dây kéo bị ngấm nước).
   3. Đã được khử khuẩn hoàn toàn số điện thoại, mã đơn hàng và email cá nhân (PII Scrubbed).
+
+---
+
+## 4. Đặc Trưng Nhiễu Mạng Xã Hội (Social Noise & Text Artifacts - Tuần 2)
+
+Thống kê trích xuất từ bộ phân loại cờ nhiễu `extract_noise_flags` trên 125 nhận xét văn bản thực tế:
+
+| Cờ Phân Nhóm Nhiễu | Số Lượng Mẫu | Tỷ Lệ (%) | Ý Nghĩa Thực Tiễn Đối Với Nghiên Cứu (RQ2) |
+| :--- | :---: | :---: | :--- |
+| **Chứa Teencode / Viết Tắt (`has_teencode`)** | **67** | **53.6%** | Chiếm hơn nửa tập dữ liệu (`ko`, `sp`, `đc`, `sz`, `ưng`...). Minh chứng tính cấp thiết của module chuẩn hóa `normalize.py`. |
+| **Đánh Giá Cực Ngắn (`is_short` $\le$ 3 từ)** | **54** | **43.2%** | Tỷ lệ đánh giá ngắn rất cao (`đẹp`, `rất tốt`, `ưng ý`, `ok`). Cần cơ chế lọc `informative` để tránh nhiễu phân tích nguyên nhân gốc. |
+| **Chứa Biểu Tượng Cảm Xúc (`has_emoji`)** | **2** | **1.6%** | Tần suất emoji thấp trên nền tảng TikTok Shop so với Facebook/Shopee. |
+| **Không Dấu Tiếng Việt (`is_no_diacritics`)** | **1** | **0.8%** | Hầu hết người mua hàng đều gõ có dấu đầy đủ trên bàn phím điện thoại thông minh. |
 
 <!-- CreBy: MenBoyBMN -->

@@ -1,0 +1,822 @@
+[
+  {
+    "id": "tts_0103",
+    "text": "Hàng chất lượng",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0120",
+    "text": "Đẹp",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0109",
+    "text": "Áo có độ dày vừa phải mặt tốt ít bị thấm mưa",
+    "source_type": "real_shop",
+    "rating": 4,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "dày"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "vừa"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0009",
+    "text": "Mặc vào thấy thoải mái mưa không thấm vào trong",
+    "source_type": "real_shop",
+    "rating": 4,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0243",
+    "text": "Hàng đã nhận , áo mưa đẹp , áo may dây kéo cứng cáp , màu chuẩn .. ok / gửi đến shop 5 sao nhé !",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "CUSTOMER_SERVICE",
+        "polarity": "positive",
+        "evidence": "shop"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "màu"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0235",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0171",
+    "text": "Đẹp và dày dặn",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "dày"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0200",
+    "text": "Giao nhanh đúng màu hài lòng về sản phẩm",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "PACKAGING_SHIPPING",
+        "polarity": "positive",
+        "evidence": "giao"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "màu"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0072",
+    "text": "Đúng hàng đặc",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0144",
+    "text": "Đặc điểm: Cố áo còn hơ chưa mặc cảm thấy nó vô nước từ cổ áo",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "WATERPROOF",
+        "polarity": "positive",
+        "evidence": "nước"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "cổ"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0236",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 4,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0242",
+    "text": "Tốt",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0197",
+    "text": "Đặc điểm: Ko giao đúng kích thước như đã đặt",
+    "source_type": "real_shop",
+    "rating": 2,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "negative",
+        "evidence": "m"
+      },
+      {
+        "aspect": "PACKAGING_SHIPPING",
+        "polarity": "negative",
+        "evidence": "giao"
+      }
+    ],
+    "overall_sentiment": "negative",
+    "informative": true
+  },
+  {
+    "id": "tts_0237",
+    "text": "Đẹp",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0184",
+    "text": "Không đúng mẫu quảng cáo",
+    "source_type": "real_shop",
+    "rating": 2,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "negative",
+        "evidence": "m"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "negative",
+        "evidence": "mẫu"
+      }
+    ],
+    "overall_sentiment": "negative",
+    "informative": true
+  },
+  {
+    "id": "tts_0114",
+    "text": "Áo mưa đẹp sản phẩm tốt 👍",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0121",
+    "text": "Đẹp",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0206",
+    "text": "xin djdefvhdgbjhdvj",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0037",
+    "text": "Áo đẹp dày dặn trong nhà mỗi người 1 cái tiện lợi",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "dày"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "tiện"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0196",
+    "text": "Chưa biết có bền k",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "bền"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0161",
+    "text": "Chất liệu thì cũg đc nhưg day kéo thì chưa đc tốt lắm",
+    "source_type": "real_shop",
+    "rating": 3,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "neutral",
+        "evidence": "m"
+      }
+    ],
+    "overall_sentiment": "neutral",
+    "informative": true
+  },
+  {
+    "id": "tts_0220",
+    "text": "✅",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0042",
+    "text": "Chất da cá mềm , nhẹ. Mặc rộng thoải mái đeo ba lô. Ko biết bền ko sử dụng một thời gian mới biết. Nói chung hàng OK nên mua nha",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "da cá"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "rộng"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0155",
+    "text": "Hàng đẹp đúng như quảng cáo OK",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0215",
+    "text": "Chất liệu tốt , mặc đẹp",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0227",
+    "text": "Mọi thứ đều tốt",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0078",
+    "text": "đúng ảnh",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0012",
+    "text": "OK.............................",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0181",
+    "text": "Ko giống mô tả .rất thất vọng về shop",
+    "source_type": "real_shop",
+    "rating": 2,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "negative",
+        "evidence": "m"
+      },
+      {
+        "aspect": "CUSTOMER_SERVICE",
+        "polarity": "negative",
+        "evidence": "shop"
+      }
+    ],
+    "overall_sentiment": "negative",
+    "informative": true
+  },
+  {
+    "id": "tts_0209",
+    "text": "Đã nhận đc hàng chuẩn màu cho chàng trai 95kg cao 1m7 khá là vừa",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "vừa"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "màu"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0186",
+    "text": "Vừa túi tiền",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "vừa"
+      },
+      {
+        "aspect": "PRICE_VALUE",
+        "polarity": "positive",
+        "evidence": "tiền"
+      },
+      {
+        "aspect": "PACKAGING_SHIPPING",
+        "polarity": "positive",
+        "evidence": "túi"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0135",
+    "text": "Tốt",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0168",
+    "text": "Chất liệu: Bị lững",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Chất liệu: Bị lững"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0223",
+    "text": "Áo tốt nên mua sử dụng nha mọi người",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0202",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0207",
+    "text": "Nhận được hàng đẹp hơn mong đợi mn nên mua nhé",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0228",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0179",
+    "text": "Giao hàng nhanh. Hàng đúng mẫu mã. Trời ơi! Mặc đi mưa bị thấm vô trong. Đi mưa 3 lần, hết 2 lần bị thấm. Chất lượng chỉ 5/10.",
+    "source_type": "real_shop",
+    "rating": 3,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "neutral",
+        "evidence": "m"
+      },
+      {
+        "aspect": "PACKAGING_SHIPPING",
+        "polarity": "neutral",
+        "evidence": "giao"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "neutral",
+        "evidence": "mẫu"
+      }
+    ],
+    "overall_sentiment": "neutral",
+    "informative": true
+  },
+  {
+    "id": "tts_0116",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0214",
+    "text": "Phù hợp với giá tiền",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "PRICE_VALUE",
+        "polarity": "positive",
+        "evidence": "giá"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0150",
+    "text": "Hàng chuẩn đẹp rất ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đẹp"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0054",
+    "text": "Mua về chưa mặc lần nào nhưng vẫn cho 5*",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0010",
+    "text": "Hàng giống mẫu",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "mẫu"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0217",
+    "text": "Giao nhanh đúng màu hài lòng về sản phẩm",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "PACKAGING_SHIPPING",
+        "polarity": "positive",
+        "evidence": "giao"
+      },
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "màu"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0158",
+    "text": "Áo dung QC thấy cũng ok",
+    "source_type": "real_shop",
+    "rating": 4,
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Áo dung QC thấy cũng"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0038",
+    "text": "Xịn xò mỗi người 1 cái rất tiện",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "tiện"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0082",
+    "text": "Chất liệu: Nhựa mỏng Đặc điểm: Tiện lợi nhanh gọn Độ bền: Thời gian quyết định",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "positive",
+        "evidence": "mỏng"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "tiện"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0017",
+    "text": "Chất liệu: Tốt như mong đợi Giá hợp lí Mưa chùm kín k lo ướt .đã mua nhiều lần Tiện lợi",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [
+      {
+        "aspect": "WATERPROOF",
+        "polarity": "positive",
+        "evidence": "ướt"
+      },
+      {
+        "aspect": "FIT_SIZE",
+        "polarity": "positive",
+        "evidence": "m"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "tiện"
+      },
+      {
+        "aspect": "PRICE_VALUE",
+        "polarity": "positive",
+        "evidence": "giá"
+      }
+    ],
+    "overall_sentiment": "positive",
+    "informative": true
+  },
+  {
+    "id": "tts_0011",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  },
+  {
+    "id": "tts_0211",
+    "text": "Ok",
+    "source_type": "real_shop",
+    "rating": 5,
+    "opinions": [],
+    "overall_sentiment": "positive",
+    "informative": false
+  }
+]
