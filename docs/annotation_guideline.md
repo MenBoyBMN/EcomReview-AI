@@ -127,3 +127,4 @@ Gán nhãn theo **ý đồ thực tế của người dùng**, không gán theo 
 | 15 | *"Khóa kéo kéo lên bị kẹt rách cả mép áo, đường may cẩu thả"* | `negative` | `[MATERIAL_DURABILITY \| negative \| "Khóa kéo kéo lên bị kẹt rách cả mép áo, đường may cẩu thả"]` | `True` |
 
 <!-- CreBy: MenBoyBMN -->
+

@@ -103,3 +103,4 @@ Nhằm đảm bảo tính tập trung cao độ cho mục tiêu nghiên cứu v�
 | **RQ3** | 10 Kịch bản thực tế của Shop Áo Mưa | Baseline P0 (Single-Prompt) vs Proposed P1 (State-Graph) | Bảng tỷ lệ Groundedness (100%), Biểu đồ Radar Rubric mù | Chương 4 & Chương 5 |
 
 <!-- CreBy: MenBoyBMN -->
+

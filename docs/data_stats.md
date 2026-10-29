@@ -1,28 +1,46 @@
 # Báo Cáo Thống Kê Khám Phá Dữ Liệu (Exploratory Data Analysis - EDA)
 
-> **Cập nhật lần cuối:** Tuần 1
-> **Trạng thái:** Track 1 (Public Benchmark) + Track 2 (Shop Áo Mưa)
+> **Dự án:** EcomReview AI — Nghiên cứu ABSA & Tối ưu hóa Thương mại Điện tử
+> **Cập nhật:** Tuần 1 · Đã nạp dữ liệu thực tế TikTok Shop
 
 ---
 
 ## 1. Tổng Quan Cỡ Mẫu (Sample Overview)
 
-| Tập Dữ Liệu | Nguồn | Số Mẫu | Định Dạng | Trạng Thái PII |
+| Phân Nhóm | Nguồn Dữ Liệu | Tổng Số Mẫu | Có Văn Bản Nhận Xét | Định Dạng Lưu Trữ |
 | :--- | :--- | :--- | :--- | :--- |
-| **Track 1: Public Benchmark** | VLSP / UIT-ViSFD | 3 mẫu | JSON (`data/public/`) | Công khai, không có PII |
-| **Track 2: Shop Áo Mưa** | Shopee / TikTok Shop | 0 mẫu | CSV (`data/interim/`) | Đã khử khuẩn PII bằng Regex |
+| **Track 1: Public Benchmark** | VLSP / UIT-ViSFD | 3 mẫu | 3 mẫu | JSON (`data/public/`) |
+| **Track 2: Shop Áo Mưa Thật** | TikTok Shop (Shop A) | 245 mẫu | 125 mẫu | CSV (`data/interim/`) |
 
 ---
 
-## 2. Đặc Trưng Dữ Liệu Shop Áo Mưa (Track 2)
+## 2. Phân Bố Đánh Giá Sản Phẩm Shop Áo Mưa (Track 2)
 
-- **Tổng số mẫu:** 0 phản hồi.
-- **Độ dài trung bình (số từ):** 0.0 từ/phản hồi.
-- **Phân bố số sao (Rating):**
-  - Số lượng mẫu có rating: 0
-  - Điểm rating trung bình: 0.00 / 5.0
+- **Tổng số lượng đơn đánh giá:** 245 đánh giá.
+- **Số lượng đánh giá có nội dung nhận xét (Text Review):** 125 mẫu (51.0%).
+- **Số lượng đánh giá chỉ bấm sao (Star-only):** 120 mẫu.
+- **Điểm số sao trung bình (Average Rating):** 4.66 / 5.0
 
-> [!NOTE]
-> Khi bạn bổ sung thêm dữ liệu vào `data/raw/shop_reviews_raw.csv`, hãy chạy lại script `python scripts/anonymize_shop_data.py` và `python scripts/eda_week1.py` để cập nhật bảng thống kê tự động.
+### Bảng Phân Bố Theo Số Sao (Rating Breakdown):
+
+| Số Sao | Số Lượng Đánh Giá | Tỷ Lệ (%) | Phân Loại Cảm Xúc Giả Định |
+| :---: | :---: | :---: | :--- |
+| 5 ⭐ | 199 | 81.2% | Tích cực (Positive) |
+| 4 ⭐ | 29 | 11.8% | Tích cực / Khá |
+| 3 ⭐ | 4 | 1.6% | Trung tính (Neutral) |
+| 2 ⭐ | 6 | 2.4% | Tiêu cực (Negative) |
+| 1 ⭐ | 7 | 2.9% | Tiêu cực nặng (Strong Negative) |
+
+---
+
+## 3. Đặc Trưng Văn Bản Nhận Xét (Text Statistics)
+
+- **Độ dài trung bình:** 8.5 từ/phản hồi.
+- **Độ dài ngắn nhất:** 1 từ.
+- **Độ dài dài nhất:** 61 từ.
+- **Hiện tượng đặc trưng trong tập dữ liệu:**
+  1. Review có độ dài trung bình chứa nhiều phản hồi chi tiết về chất liệu da cá, độ mềm, và chống thấm nước.
+  2. Xuất hiện các review mỉa mai ngầm và đánh giá đa khía cạnh (khen giao hàng nhưng chê dây kéo bị ngấm nước).
+  3. Đã được khử khuẩn hoàn toàn số điện thoại, mã đơn hàng và email cá nhân (PII Scrubbed).
 
 <!-- CreBy: MenBoyBMN -->
