@@ -78,8 +78,27 @@ EMOJI_SENTIMENT_MAP: dict[str, str] = {
 }
 
 PRICE_K_RE = re.compile(r"\b(\d+)\s*k\b", re.IGNORECASE)
-WEIGHT_KG_RE = re.compile(r"\b(\d+)\s*kg\b", re.IGNORECASE)
-HEIGHT_M_RE = re.compile(r"\b1m(\d{1,2})\b", re.IGNORECASE)
+
+COMPOUND_FOLLOWERS: set[str] = {
+    "liệu",
+    "lieu",
+    "lượng",
+    "luong",
+    "vải",
+    "vai",
+    "dù",
+    "du",
+    "nhựa",
+    "nhua",
+    "lỏng",
+    "độc",
+    "xám",
+    "với",
+    "vs",
+    "shop",
+    "sh",
+    "sop",
+}
 
 # Vietnamese diacritics character set
 VN_DIACRITICS_PATTERN = re.compile(
@@ -121,26 +140,6 @@ def normalize_social_text(text: str | None, enable: bool = True) -> str:
 
     # 3. Replace teencode word by word while preserving boundary punctuation
     # Context-aware guard against over-normalizing compound nouns ("chất liệu", "chất vải", etc.)
-    compound_followers = {
-        "liệu",
-        "lieu",
-        "lượng",
-        "luong",
-        "vải",
-        "vai",
-        "dù",
-        "du",
-        "nhựa",
-        "nhua",
-        "lỏng",
-        "độc",
-        "xám",
-        "với",
-        "vs",
-        "shop",
-        "sh",
-        "sop",
-    }
     raw_words = t.split()
     tokens: list[str] = []
     for idx, word in enumerate(raw_words):
@@ -151,7 +150,7 @@ def normalize_social_text(text: str | None, enable: bool = True) -> str:
         punct_prefix = word[: len(word) - len(word.lstrip(".,!?;:()[]\"'"))]
         punct_suffix = word[len(word.rstrip(".,!?;:()[]\"'")) :]
         next_clean = raw_words[idx + 1].strip(".,!?;:()[]\"'") if idx + 1 < len(raw_words) else ""
-        if clean_w in {"chất", "chat"} and next_clean in compound_followers:
+        if clean_w in {"chất", "chat"} and next_clean in COMPOUND_FOLLOWERS:
             mapped = "chất" if clean_w == "chất" else clean_w
         else:
             mapped = TEENCODE_MAP.get(clean_w, clean_w)
@@ -204,14 +203,18 @@ def load_social_lexicon(
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     tc_ext = data.get("teencode_map") or {}
     emo_ext = data.get("emoji_sentiment_map") or {}
+    followers_ext = data.get("compound_followers_guard") or []
     for k, v in tc_ext.items():
         TEENCODE_MAP[str(k).lower()] = str(v)
     for k, v in emo_ext.items():
         EMOJI_SENTIMENT_MAP[str(k)] = str(v)
+    for f_word in followers_ext:
+        COMPOUND_FOLLOWERS.add(str(f_word).lower())
     return {
         "loaded": True,
         "teencode_count": len(TEENCODE_MAP),
         "emoji_count": len(EMOJI_SENTIMENT_MAP),
+        "compound_followers_count": len(COMPOUND_FOLLOWERS),
     }
 
 

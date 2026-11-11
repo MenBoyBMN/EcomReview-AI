@@ -8,7 +8,8 @@ from ecomreview.api.main import create_app
 class TestEcomReviewAPI:
     """Verify all 10 RESTful endpoints of the EcomReview AI backend."""
 
-    def test_full_10_endpoints_lifecycle(self, tmp_path):
+    def test_full_10_endpoints_lifecycle(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ECOMREVIEW_TRACE_DIR", str(tmp_path / "traces"))
         db_file = tmp_path / "test_api.db"
         app = create_app(db_path=str(db_file))
         client = TestClient(app)

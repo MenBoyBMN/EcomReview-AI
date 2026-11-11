@@ -131,3 +131,4 @@ Tài liệu này tổng hợp **30 câu hỏi phản biện chuyên sâu** chia 
 - **Trả lời:** Hiện tại hệ thống mới phân tích kênh văn bản (`Text Reviews`), chưa phân tích trực tiếp hình ảnh/video đính kèm trong đánh giá của khách hàng, và bước thực thi hành động lên sàn Shopee/TikTok vẫn do chủ shop thao tác sau khi nhấn `Approve`. Hướng phát triển tiếp theo là tích hợp mô hình thị giác-ngôn ngữ (`Multimodal VLM`) để bắt lỗi đường may/màu sắc trực tiếp từ ảnh feedback và kết nối **Shopee/TikTok Open Platform API** để tự động đẩy phản hồi đánh giá ngay khi chủ shop nhấn nút duyệt.
 
 <!-- CreBy: MenBoyBMN -->
+

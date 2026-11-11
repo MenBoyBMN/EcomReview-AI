@@ -40,10 +40,8 @@ class ActionPlanner:
     def __init__(
         self,
         playbook_path: str | Path = "knowledge/playbook_aomua.yaml",
-        prompt_path: str | Path = "prompts/planner_v1.md",
     ):
         self.playbook_path = Path(playbook_path)
-        self.prompt_path = Path(prompt_path)
         self.playbook_data: dict[str, Any] = {"playbook_rules": [], "guardrails": {}}
         if self.playbook_path.exists():
             self.playbook_data = (

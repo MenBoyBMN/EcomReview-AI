@@ -29,3 +29,4 @@ Tài liệu này ghi nhận kết quả 2 phiên chạy thử thuyết trình b�
   2. Mở sẵn file video `demo/EcomReview_AI_Demo.mp4` ở tab bên cạnh để có thể tua nhanh tới bất kỳ phân cảnh nào khi Hội đồng yêu cầu.
 
 <!-- CreBy: MenBoyBMN -->
+

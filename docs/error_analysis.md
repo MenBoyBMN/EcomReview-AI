@@ -62,3 +62,4 @@ Tuân thủ kỷ luật nghiên cứu (tuyệt đối không chạm vào kết q
 | **`FIX_03`** | `E1 / E2` | `prompts/analyzer_v2_frozen.md` (Consequence-first & Contrastive Rule) | `A1-v1` đạt Macro-F1 = `0.8603` trên `dev.jsonl` (nhầm 4 ca đường may thấm nước). | **`A1-v2` đạt Macro-F1 = `0.9120`** (`+5.17%` trên tập `dev.jsonl`). |
 
 <!-- CreBy: MenBoyBMN -->
+

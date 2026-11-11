@@ -82,7 +82,7 @@ class GroundednessEvaluator:
                 """
                 SELECT o.review_id, o.evidence, o.evidence_ok
                 FROM opinions o
-                JOIN reviews r ON o.review_id = r.review_id
+                JOIN reviews r ON o.review_id = r.review_id AND o.scenario_tag = r.scenario_tag
                 WHERE r.scenario_tag = ?
                 """,
                 (scenario_tag,),

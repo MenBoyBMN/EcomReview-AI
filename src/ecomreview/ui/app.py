@@ -176,10 +176,11 @@ def render_page_actions(db: DatabaseManager, scenario_tag: str) -> None:
     st.header("🎯 Trang 3: Trung Tâm Hành Động & Kiểm Định Hybrid Critic (R1–R7)")
 
     if st.button("🚀 Chạy Lại Vòng Lặp Planner ⇄ Hybrid Critic (State-Graph)", type="primary"):
+        active_engine = st.session_state.get("engine_mode", "gemini")
         runner = EcomReviewGraphRunner(db=db, max_retries=2)
         res = runner.run_scenario(scenario_tag=scenario_tag, min_n=3, persist_db=True)
         st.success(
-            f"Đã hoàn tất State-Graph trong {res['duration_ms']} ms | "
+            f"Đã hoàn tất State-Graph ({active_engine.upper()}) trong {res['duration_ms']} ms | "
             f"Critic Passed: {res['final_critic_passed']} (Score: {res['final_critic_score']}/5.0)"
         )
 
@@ -226,11 +227,25 @@ def render_page_actions(db: DatabaseManager, scenario_tag: str) -> None:
                         f"Evidence IDs: `{', '.join(ev_ids)}` | "
                         f"Critic Score: `{c_sc}/5.0` (Retries: `{c_rt}`)"
                     )
+                    with st.expander("🛡️ Xem Nhật Ký Kiểm Định Hybrid Critic (R1–R7 Trace JSON)"):
+                        st.json(trace)
 
                     edited_txt = st.text_area(
                         "Chỉnh sửa nội dung hành động (nếu cần trước khi duyệt):",
                         value=str(r["what_to_do"]),
                         key=f"edit_{aid}",
+                    )
+                    rej_reason = st.selectbox(
+                        "Lý do từ chối (nếu chọn Reject):",
+                        [
+                            "NOT_FEASIBLE",
+                            "TOO_GENERIC",
+                            "WRONG_EVIDENCE",
+                            "TOO_COSTLY",
+                            "OUT_OF_SCOPE",
+                            "OTHER",
+                        ],
+                        key=f"rej_reason_{aid}",
                     )
                     col_a, col_e, col_r = st.columns(3)
                     if col_a.button("✅ Phê duyệt (Approve)", key=f"btn_app_{aid}"):
@@ -244,7 +259,12 @@ def render_page_actions(db: DatabaseManager, scenario_tag: str) -> None:
                         st.success(f"Đã lưu chỉnh sửa (Edit distance: {dist_c} ký tự)")
                         st.rerun()
                     if col_r.button("❌ Từ chối (Reject)", key=f"btn_rej_{aid}"):
-                        db.record_action_decision(aid, "REJECTED", note="Rejected via UI")
+                        db.record_action_decision(
+                            aid,
+                            "REJECTED",
+                            reason_category=rej_reason,
+                            note=f"Rejected via UI ({rej_reason})",
+                        )
                         st.rerun()
 
 

@@ -172,3 +172,4 @@ erDiagram
 | **ADR-04** | **Dual-Engine DB (PostgreSQL 16 + SQLite Fallback)** & `DEMO_CACHE_MODE` | Chỉ hỗ trợ PostgreSQL & bắt buộc gọi mạng | Đảm bảo hệ thống chạy mượt mà 100% cả trong môi trường Docker Production lẫn khi kiểm thử cục bộ / bảo vệ đồ án không cần Internet. |
 
 <!-- CreBy: MenBoyBMN -->
+

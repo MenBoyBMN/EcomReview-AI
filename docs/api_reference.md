@@ -27,11 +27,10 @@ Dịch vụ Backend **FastAPI (`src/ecomreview/api/main.py`)** cung cấp **10 R
 **Response (`200 OK`):**
 ```json
 {
-  "status": "ok",
-  "service": "ecomreview-ai-api",
-  "version": "1.0.0",
-  "demo_cache_mode": true,
-  "reviews_count": 334
+  "status": "healthy",
+  "database": "connected",
+  "total_reviews_in_db": 554,
+  "demo_cache_mode": true
 }
 ```
 
@@ -47,12 +46,12 @@ Dịch vụ Backend **FastAPI (`src/ecomreview/api/main.py`)** cung cấp **10 R
       "shop": "shop_aomua_vn",
       "product": "ao_mua_bo_da_ca",
       "rating": 2,
-      "text_raw": "Đi mưa lớn nước ngấm qua đường may đáy quần, gọi mình số 0912345678 nhé"
+      "text": "Đi mưa lớn nước ngấm qua đường may đáy quần, gọi mình số 0912345678 nhé"
     }
   ]
 }
 ```
-**Response (`200 OK`):** Tự động che giấu số điện thoại thành `[PHONE_REDACTED]` và lưu vào bảng `reviews`.
+**Response (`200 OK`):** Tự động che giấu số điện thoại thành `[PHONE]` và lưu vào bảng `reviews`.
 
 ### 2.3. `GET /api/v1/stats/overview?scenario_tag=real_shop&min_n=5`
 **Response (`200 OK`):**
@@ -60,18 +59,24 @@ Dịch vụ Backend **FastAPI (`src/ecomreview/api/main.py`)** cung cấp **10 R
 {
   "scenario_tag": "real_shop",
   "total_reviews": 150,
+  "avg_rating": 4.28,
+  "positive_reviews": 102,
   "negative_reviews": 38,
-  "negative_pct": 25.3,
+  "negative_rate_pct": 25.3,
   "negative_ci_95": [19.0, 32.8],
+  "platform_counts": {
+    "shopee": 45,
+    "tiktok": 105
+  },
   "aspect_stats": [
     {
       "aspect": "WATERPROOF",
-      "total_mentions": 18,
+      "total": 18,
       "neg_count": 9,
       "pos_count": 9,
       "neg_pct": 50.0,
-      "neg_ci_low": 29.0,
-      "neg_ci_high": 71.0
+      "ci_low": 29.0,
+      "ci_high": 71.0
     }
   ],
   "hidden_complaints": {
@@ -136,3 +141,4 @@ Dịch vụ Backend **FastAPI (`src/ecomreview/api/main.py`)** cung cấp **10 R
 ```
 
 <!-- CreBy: MenBoyBMN -->
+

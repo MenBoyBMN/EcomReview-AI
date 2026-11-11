@@ -30,3 +30,4 @@ Nếu bạn muốn tự quay màn hình kèm giọng nói cá nhân của mình 
 3. Mở **OBS Studio** $\rightarrow$ Chọn `Display Capture (1920x1080, 30fps)` + `Audio Input Capture` $\rightarrow$ Nhấn **Start Recording** và đọc theo đúng 7 lời bình trong bảng trên.
 
 <!-- CreBy: MenBoyBMN -->
+

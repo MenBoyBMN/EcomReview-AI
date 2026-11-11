@@ -2,7 +2,8 @@
 
 -- 1. Customer reviews (PII-scrubbed)
 CREATE TABLE IF NOT EXISTS reviews (
-    review_id         TEXT PRIMARY KEY,
+    review_id         TEXT NOT NULL,
+    scenario_tag      TEXT NOT NULL DEFAULT 'real_shop',
     platform          TEXT NOT NULL,              -- 'shopee' | 'tiktok'
     shop              TEXT NOT NULL DEFAULT 'shop_a',
     product           TEXT NOT NULL DEFAULT 'ao_mua_da_ca',
@@ -10,23 +11,25 @@ CREATE TABLE IF NOT EXISTS reviews (
     text_raw          TEXT NOT NULL,
     text_norm         TEXT NOT NULL,
     source            TEXT NOT NULL DEFAULT 'review', -- 'review' | 'comment' | 'chat'
-    scenario_tag      TEXT DEFAULT 'real_shop',
     overall_sentiment TEXT,                       -- 'positive' | 'negative' | 'neutral'
     informative       BOOLEAN DEFAULT TRUE,
     created_at        DATE,
-    imported_at       TIMESTAMPTZ DEFAULT NOW()
+    imported_at       TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (review_id, scenario_tag)
 );
 
 -- 2. Aspect-based sentiment opinions (ABSA extraction)
 CREATE TABLE IF NOT EXISTS opinions (
     id                BIGSERIAL PRIMARY KEY,
-    review_id         TEXT NOT NULL REFERENCES reviews(review_id) ON DELETE CASCADE,
+    review_id         TEXT NOT NULL,
+    scenario_tag      TEXT NOT NULL DEFAULT 'real_shop',
     aspect            TEXT NOT NULL,              -- 8 domain aspects + 'GENERAL'
     polarity          TEXT NOT NULL,              -- 'positive' | 'negative' | 'neutral'
     evidence          TEXT NOT NULL,
     evidence_ok       BOOLEAN NOT NULL DEFAULT TRUE,
     analyzer_method   TEXT NOT NULL DEFAULT 'gemini_v2',
-    created_at        TIMESTAMPTZ DEFAULT NOW()
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (review_id, scenario_tag) REFERENCES reviews(review_id, scenario_tag) ON DELETE CASCADE
 );
 
 -- 3. Numerically verified statistical insights

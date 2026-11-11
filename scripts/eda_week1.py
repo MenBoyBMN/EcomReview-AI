@@ -1,11 +1,14 @@
 """Script for exploratory data analysis (EDA) of raw and public review datasets."""
 
 import csv
-import json
 from pathlib import Path
 
 INTERIM_FILE = Path("data/interim/shop_reviews_anon.csv")
-PUBLIC_FILE = Path("data/public/vlsp2018_absa_sample.json")
+PUBLIC_FILES = [
+    Path("data/public/train.jsonl"),
+    Path("data/public/val.jsonl"),
+    Path("data/public/test.jsonl"),
+]
 OUTPUT_MD = Path("docs/data_stats.md")
 
 
@@ -38,10 +41,10 @@ def analyze_dataset():
                     text_lengths.append(len(words))
 
     public_count = 0
-    if PUBLIC_FILE.exists():
-        with open(PUBLIC_FILE, mode="r", encoding="utf-8") as f:
-            data = json.load(f)
-            public_count = len(data)
+    for pf in PUBLIC_FILES:
+        if pf.exists():
+            with open(pf, mode="r", encoding="utf-8") as f:
+                public_count += sum(1 for line in f if line.strip())
 
     avg_words = sum(text_lengths) / len(text_lengths) if text_lengths else 0.0
     avg_rating = sum(shop_ratings) / len(shop_ratings) if shop_ratings else 0.0

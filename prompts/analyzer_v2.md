@@ -9,7 +9,7 @@ Nhiệm vụ của bạn là đọc phản hồi của khách hàng (được c�
 ## 1. Hệ Thống 8 Khía Cạnh Đánh Giá (Taxonomy) & Ranh Giới Ngữ Nghĩa (v2 Calibration)
 
 1. `WATERPROOF`: Khả năng chống thấm nước, đi mưa không ướt, độ kín đường may ép nhiệt chống tràn nước, bị thấm/dột/ngấm nước vào trong.
-   - **Quy tắc phânграни (Boundary Rule v2):** Nếu khách nói *"nước thấm qua đường may/khóa kéo/cổ áo khi đi mưa"*, bắt buộc trích xuất `WATERPROOF: negative` (có thể trích xuất thêm `MATERIAL_DURABILITY: negative` nếu chê đường may/khóa kéo kém).
+   - **Quy tắc phân định (Boundary Rule v2):** Nếu khách nói *"nước thấm qua đường may/khóa kéo/cổ áo khi đi mưa"*, bắt buộc trích xuất `WATERPROOF: negative` (có thể trích xuất thêm `MATERIAL_DURABILITY: negative` nếu chê đường may/khóa kéo kém).
 2. `MATERIAL_DURABILITY`: Chất liệu vải (dù, da cá, PVC, nhựa, tráng PU), độ bền, chống rách, độ dày/mỏng của vải, nút bấm, khóa kéo, đường may, mùi nhựa.
    - **Quy tắc phân định (Boundary Rule v2):** Cụm *"độ dày vừa phải"* thuộc `MATERIAL_DURABILITY` (chất liệu), TUYỆT ĐỐI KHÔNG gán nhầm sang `FIT_SIZE`.
 3. `FIT_SIZE`: Kích cỡ form áo (`size L, XL, 2XL`), độ dài, độ rộng, độ vừa vặn cơ thể (`cao 1m7, 70kg mặc vừa`), độ che phủ chân hoặc đeo balo.

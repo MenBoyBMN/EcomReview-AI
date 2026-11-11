@@ -9,7 +9,7 @@
 
 | Phân Nhóm | Nguồn Dữ Liệu | Tổng Số Mẫu | Có Văn Bản Nhận Xét | Định Dạng Lưu Trữ |
 | :--- | :--- | :--- | :--- | :--- |
-| **Track 1: Public Benchmark** | VLSP / UIT-ViSFD | 3 mẫu | 3 mẫu | JSON (`data/public/`) |
+| **Track 1: Public Benchmark** | VLSP / UIT-ViSFD | 2,200 mẫu | 2,200 mẫu | JSONL (`data/public/`) |
 | **Track 2: Shop Áo Mưa Thật** | TikTok Shop (Shop A) | 245 mẫu | 125 mẫu | CSV (`data/interim/`) |
 
 ---

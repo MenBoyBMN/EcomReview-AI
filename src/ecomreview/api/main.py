@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from ecomreview.agent.graph_runner import EcomReviewGraphRunner
 from ecomreview.agent.insight_engine import InsightEngine
@@ -45,7 +45,7 @@ class ReviewUploadItem(BaseModel):
     shop: str = "shop_a"
     product: str = "ao_mua_da_ca"
     rating: int = Field(default=5, ge=1, le=5)
-    text: str
+    text: str = Field(validation_alias=AliasChoices("text", "text_raw"))
     overall_sentiment: str | None = None
     opinions: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -186,6 +186,49 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "analyzer_method": payload.analyzer_method,
             },
         )
+        # Ensure reviews lacking extracted opinions are analyzed first
+        with db.get_connection(read_only=True) as conn:
+            unparsed = conn.execute(
+                """
+                SELECT r.* FROM reviews r
+                LEFT JOIN opinions o
+                  ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
+                WHERE r.scenario_tag = ?
+                GROUP BY r.review_id, r.scenario_tag
+                HAVING COUNT(o.id) = 0
+                """,
+                (payload.scenario_tag,),
+            ).fetchall()
+
+        if unparsed:
+            rule_analyzer = B1RuleAnalyzer(enable_norm=True)
+            for r in unparsed:
+                res = rule_analyzer.analyze_review(str(r["text_raw"]))
+                ops = [
+                    {
+                        "aspect": op.aspect.value,
+                        "polarity": op.polarity.value,
+                        "evidence": op.evidence,
+                        "evidence_ok": True,
+                    }
+                    for op in res.opinions
+                ]
+                db.upsert_review_and_opinions(
+                    review_id=str(r["review_id"]),
+                    platform=str(r["platform"]),
+                    shop=str(r["shop"]),
+                    product=str(r["product"]),
+                    rating=int(r["rating"] or 5),
+                    text_raw=str(r["text_raw"]),
+                    text_norm=str(r["text_norm"]),
+                    source=str(r["source"] or "api_upload"),
+                    scenario_tag=payload.scenario_tag,
+                    overall_sentiment=str(r["overall_sentiment"] or res.overall_sentiment.value),
+                    informative=bool(res.informative),
+                    opinions=ops,
+                    analyzer_method=payload.analyzer_method,
+                )
+
         engine = InsightEngine(db=db)
         insights = engine.generate_insights(
             scenario_tag=payload.scenario_tag, min_n=payload.min_n, persist=True
@@ -308,7 +351,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def generate_actions(payload: ActionGenerateRequest) -> dict[str, Any]:
         """7. Execute the P1 State-Graph (Planner <-> HybridCritic) to generate grounded actions."""
         db = _get_db()
-        runner = EcomReviewGraphRunner(db=db, max_retries=2)
+        trace_dir = os.getenv("ECOMREVIEW_TRACE_DIR", "results/traces")
+        runner = EcomReviewGraphRunner(db=db, max_retries=2, trace_dir=trace_dir)
         trace = runner.run_scenario(
             scenario_tag=payload.scenario_tag,
             min_n=payload.min_n,

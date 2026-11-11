@@ -40,3 +40,4 @@
    - *Biện pháp giảm thiểu:* Áp dụng **Khung Đánh giá Tam giác (`Triangulated Evaluation`)** kết hợp: (i) 5 chỉ số định lượng tự động bằng code (`groundedness.py`), (ii) Chấm mù A/B ẩn danh theo Rubric 5 tiêu chí `C1–C5` có kiểm định Bootstrap 95% CI, và (iii) Đo lường tỷ lệ chấp nhận sử dụng (`Usable Adoption = 96.55%`) kèm khoảng cách chỉnh sửa ký tự (`edit_distance_chars`).
 
 <!-- CreBy: MenBoyBMN -->
+

@@ -3,7 +3,8 @@
 from ecomreview.analyze.a1_gemini import A1GeminiAnalyzer
 from ecomreview.analyze.b1_rule import B1RuleAnalyzer
 from ecomreview.analyze.b2_tfidf import B2TfidfAnalyzer
+from ecomreview.analyze.b3_visobert import B3ViSoBERTAnalyzer
 
-__all__ = ["B1RuleAnalyzer", "B2TfidfAnalyzer", "A1GeminiAnalyzer"]
+__all__ = ["B1RuleAnalyzer", "B2TfidfAnalyzer", "B3ViSoBERTAnalyzer", "A1GeminiAnalyzer"]
 
 # CreBy: MenBoyBMN
