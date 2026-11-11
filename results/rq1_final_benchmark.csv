@@ -1,0 +1,5 @@
+﻿Track,System,Overall_Sentiment_F1,Macro_Aspect_Det_F1,Latency_ms,Cost_per_1k
+Track 1: Public Benchmark (UIT-ViSFD),B1: Rule & Lexicon,0.4209 [0.3363 - 0.7333],0.5558,2.2,$0.00
+Track 1: Public Benchmark (UIT-ViSFD),B2: TF-IDF + LogReg,0.6033 [0.5500 - 0.9663],0.6441,9.2,$0.00
+Track 1: Public Benchmark (UIT-ViSFD),B3: ViSoBERT (Fine-tuned),0.5806 [0.5229 - 0.9395],0.6397,14.6,$0.00
+Track 1: Public Benchmark (UIT-ViSFD),A1-v2: Gemini Flash (Frozen),0.5462 [0.4818 - 0.6000],0.6045,752.3,$0.05

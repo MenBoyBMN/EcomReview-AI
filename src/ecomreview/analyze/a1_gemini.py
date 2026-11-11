@@ -52,6 +52,7 @@ class A1GeminiAnalyzer:
         self.quota_exhausted: bool = False
         self._exhausted_models: set[str] = set()
         self._call_counter: int = 0
+        self._last_was_cache_hit: bool = False
         default_pool = [
             "gemini-3.5-flash-lite",
             "gemini-3.1-flash-lite",
@@ -119,14 +120,38 @@ class A1GeminiAnalyzer:
         cache_key = self._compute_cache_key(text)
         cache_file = self.cache_dir / f"gemini_{cache_key}.json"
 
-        # 1. Check local SHA-256 cache
-        if cache_file.exists():
-            try:
-                cached_data = json.loads(cache_file.read_text(encoding="utf-8"))
-                analysis = ReviewAnalysis.model_validate(cached_data)
-                return self._post_validate_evidence(analysis, text, norm_text)
-            except Exception as e:
-                logger.warning("Cache read failed for key %s: %s. Fetching from API.", cache_key, e)
+        # 1. Check local SHA-256 cache (including equivalent clean-text cache keys)
+        candidate_keys = [cache_key]
+        clean = text.strip()
+        if norm_text.strip() == clean:
+            alt_k1 = hashlib.sha256(
+                f"{self.model_id}|{self.prompt_version}|True|{clean}".encode("utf-8")
+            ).hexdigest()
+            alt_k2 = hashlib.sha256(f"{self.model_id}|v1|True|{clean}".encode("utf-8")).hexdigest()
+            candidate_keys.extend([alt_k1, alt_k2])
+        elif self.enable_norm:
+            alt_v1 = hashlib.sha256(f"{self.model_id}|v1|True|{clean}".encode("utf-8")).hexdigest()
+            candidate_keys.append(alt_v1)
+
+        for ck in dict.fromkeys(candidate_keys):
+            cand_file = self.cache_dir / f"gemini_{ck}.json"
+            if cand_file.exists():
+                try:
+                    cached_data = json.loads(cand_file.read_text(encoding="utf-8"))
+                    analysis = ReviewAnalysis.model_validate(cached_data)
+                    if ck != cache_key and not cache_file.exists():
+                        cache_file.write_text(
+                            json.dumps(
+                                analysis.model_dump(mode="json"), ensure_ascii=False, indent=2
+                            ),
+                            encoding="utf-8",
+                        )
+                    self._last_was_cache_hit = True
+                    return self._post_validate_evidence(analysis, text, norm_text)
+                except Exception as e:
+                    logger.warning("Cache read failed for key %s: %s.", ck, e)
+
+        self._last_was_cache_hit = False
 
         # Fast circuit-breaker only if ALL models in pool are exhausted
         if self.quota_exhausted and self.fallback_on_quota:
@@ -250,7 +275,7 @@ class A1GeminiAnalyzer:
         for i, t in enumerate(texts):
             res = self.analyze_review(t)
             results.append(res)
-            if delay_between_calls > 0 and i < len(texts) - 1:
+            if delay_between_calls > 0 and i < len(texts) - 1 and not self._last_was_cache_hit:
                 time.sleep(delay_between_calls)
         return results
 

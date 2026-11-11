@@ -322,8 +322,9 @@ NEGATION_WORDS = {
 class B1RuleAnalyzer:
     """Rule and lexicon-based ABSA analyzer for raincoat e-commerce reviews."""
 
-    def __init__(self, window_size: int = 5):
+    def __init__(self, window_size: int = 5, enable_norm: bool = True):
         self.window_size = window_size
+        self.enable_norm = enable_norm
 
     def _determine_sentiment_in_window(
         self, tokens: list[str], target_idx: int
@@ -378,7 +379,7 @@ class B1RuleAnalyzer:
                 informative=False,
             )
 
-        norm_text = normalize_social_text(text, enable=True)
+        norm_text = normalize_social_text(text, enable=self.enable_norm)
         tokens = re.findall(r"\w+", norm_text.lower())
         raw_tokens = re.findall(r"\w+", text)
 

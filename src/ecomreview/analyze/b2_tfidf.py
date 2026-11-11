@@ -28,9 +28,9 @@ from ecomreview.schemas import (
 
 
 @lru_cache(maxsize=8192)
-def tokenize_vietnamese(text: str) -> str:
+def tokenize_vietnamese(text: str, enable_norm: bool = True) -> str:
     """Tokenize Vietnamese text using underthesea with fallback to whitespace."""
-    norm = normalize_social_text(text, enable=True)
+    norm = normalize_social_text(text, enable=enable_norm)
     try:
         import underthesea
 
@@ -92,8 +92,9 @@ class SafeAspectClassifier:
 class B2TfidfAnalyzer:
     """Two-Tier TF-IDF + Logistic Regression ABSA Analyzer."""
 
-    def __init__(self, random_state: int = 42):
+    def __init__(self, random_state: int = 42, enable_norm: bool = True):
         self.random_state = random_state
+        self.enable_norm = enable_norm
         self.vectorizer = TfidfVectorizer(
             ngram_range=(1, 2),
             max_features=10000,
@@ -102,7 +103,7 @@ class B2TfidfAnalyzer:
         self.overall_clf: LogisticRegression | None = None
         self.macro_clfs: dict[str, SafeAspectClassifier] = {}
         self.fine_clfs: dict[str, SafeAspectClassifier] = {}
-        self.rule_fallback = B1RuleAnalyzer()
+        self.rule_fallback = B1RuleAnalyzer(enable_norm=enable_norm)
         self.is_fitted: bool = False
 
     def _extract_evidence_for_aspect(self, text: str, aspect: Aspect) -> str:
@@ -128,7 +129,7 @@ class B2TfidfAnalyzer:
         with open(public_train_path, "r", encoding="utf-8") as f:
             for line in f:
                 item = json.loads(line)
-                public_texts.append(tokenize_vietnamese(item["text"]))
+                public_texts.append(tokenize_vietnamese(item["text"], enable_norm=self.enable_norm))
                 public_overall.append(str(item.get("overall_sentiment", "neutral")).lower())
                 m_map = {}
                 for op in item.get("opinions", []):
@@ -141,7 +142,7 @@ class B2TfidfAnalyzer:
         with open(gold_dev_path, "r", encoding="utf-8") as f:
             for line in f:
                 item = json.loads(line)
-                gold_texts.append(tokenize_vietnamese(item["text"]))
+                gold_texts.append(tokenize_vietnamese(item["text"], enable_norm=self.enable_norm))
                 f_map = {}
                 for op in item.get("opinions", []):
                     asp_val = (
@@ -204,7 +205,7 @@ class B2TfidfAnalyzer:
                 informative=False,
             )
 
-        tokenized = tokenize_vietnamese(text)
+        tokenized = tokenize_vietnamese(text, enable_norm=self.enable_norm)
         X = self.vectorizer.transform([tokenized])
 
         # Predict Overall Sentiment
