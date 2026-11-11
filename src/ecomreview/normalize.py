@@ -2,6 +2,10 @@
 
 import re
 import unicodedata
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 # Comprehensive Teencode and abbreviation dictionary on Shopee & TikTok Shop
 TEENCODE_MAP: dict[str, str] = {
@@ -187,6 +191,27 @@ def extract_noise_flags(text: str | None) -> dict[str, bool]:
         "has_emoji": has_emoji,
         "is_no_diacritics": is_no_diacritics,
         "is_short": is_short,
+    }
+
+
+def load_social_lexicon(
+    yaml_path: str | Path = "knowledge/vn_social_lexicon.yaml",
+) -> dict[str, Any]:
+    """Load external YAML social lexicon and merge into TEENCODE_MAP & EMOJI_SENTIMENT_MAP."""
+    p = Path(yaml_path)
+    if not p.exists():
+        return {"loaded": False, "teencode_count": len(TEENCODE_MAP)}
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    tc_ext = data.get("teencode_map") or {}
+    emo_ext = data.get("emoji_sentiment_map") or {}
+    for k, v in tc_ext.items():
+        TEENCODE_MAP[str(k).lower()] = str(v)
+    for k, v in emo_ext.items():
+        EMOJI_SENTIMENT_MAP[str(k)] = str(v)
+    return {
+        "loaded": True,
+        "teencode_count": len(TEENCODE_MAP),
+        "emoji_count": len(EMOJI_SENTIMENT_MAP),
     }
 
 

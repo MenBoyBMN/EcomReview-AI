@@ -1,0 +1,27 @@
+# Optional Docker Compose Override for Local AI Ollama (Addon 11 — v1.1-addon)
+# Run with: docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ecomreview-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  api:
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
+
+  ui:
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
+
+volumes:
+  ollama_data:
+
+# CreBy: MenBoyBMN

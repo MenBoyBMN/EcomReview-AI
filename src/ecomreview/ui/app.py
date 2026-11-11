@@ -309,6 +309,27 @@ def main() -> None:
         "Chọn Kịch bản Dữ liệu (`scenario_tag`):", scenarios, index=default_idx
     )
 
+    from ecomreview.llm_provider import EngineMode, check_ollama_health
+
+    engine_choice = st.sidebar.selectbox(
+        "AI Engine Backend (Addon 11):",
+        [
+            "Cloud API: Gemini Flash (Default)",
+            "Local AI: Ollama Qwen2.5-7B (Offline)",
+        ],
+    )
+    if "Ollama" in engine_choice:
+        st.session_state["engine_mode"] = EngineMode.OLLAMA_LOCAL.value
+        health = check_ollama_health(timeout_sec=0.8)
+        if health["online"]:
+            st.sidebar.success(f"🟢 Ollama Online ({health['base_url']})")
+        else:
+            st.sidebar.warning(
+                "🟡 Ollama chưa bật tại localhost:11434 — tự động dùng Cache/Fallback an toàn."
+            )
+    else:
+        st.session_state["engine_mode"] = EngineMode.GEMINI_CLOUD.value
+
     page = st.sidebar.radio(
         "Điều hướng 4 Trang Chức Năng:",
         [
