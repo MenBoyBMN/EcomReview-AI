@@ -218,33 +218,39 @@ def main():
             (
                 f"Độ đồng thuận trung bình giữa 2 lượt gán nhãn độc lập đạt "
                 f"**$\\kappa_{{\\text{{mean}}}} = {mean_kappa_aspects:.4f}$** "
-                f"(Overall Sentiment $\\kappa = {kappa_overall:.4f}$, vượt ngưỡng chuẩn khoa học $\\kappa \\ge 0.75$). "
-                f"Phân tích {len(disagreements)} ca bất đồng chỉ ra các trường hợp biên đã được hiệu đính:"
+                f"(Overall Sentiment $\\kappa = {kappa_overall:.4f}$, vượt ngưỡng "
+                f"chuẩn khoa học $\\kappa \\ge 0.75$). "
+                f"Phân tích {len(disagreements)} ca bất đồng chỉ ra các trường hợp biên:"
             ),
             "",
             (
                 r"1. **Đa nghĩa của từ ngữ trong ngữ cảnh:** Các cụm như 'độ dày vừa phải' "
-                r"hay 'vừa túi tiền' dễ tạo giao thoa giữa `FIT_SIZE`, `MATERIAL_DURABILITY` và `PRICE_VALUE`."
+                r"hay 'vừa túi tiền' dễ tạo giao thoa giữa `FIT_SIZE`, "
+                r"`MATERIAL_DURABILITY` và `PRICE_VALUE`."
             ),
             (
                 r"2. **Khía cạnh ẩn & Phủ định kép:** Các câu nhận xét kiểu "
-                r"'ít bị thấm mưa', 'mưa không thấm' được rà soát kỹ để gán chuẩn `WATERPROOF: positive`."
+                r"'ít bị thấm mưa', 'mưa không thấm' được rà soát kỹ để gán "
+                r"chuẩn `WATERPROOF: positive`."
             ),
             (
-                r"3. **Mâu thuẫn giữa Rating và Nội dung (Hidden Complaint):** Mẫu `tts_0144` khách chấm 5 sao "
-                r"nhưng chê 'vô nước từ cổ áo' được thống nhất gán `WATERPROOF: negative`."
+                r"3. **Mâu thuẫn giữa Rating và Nội dung (Hidden Complaint):** "
+                r"Mẫu `tts_0144` khách chấm 5 sao nhưng chê 'vô nước từ cổ áo' "
+                r"được thống nhất gán `WATERPROOF: negative`."
             ),
             (
-                r"4. **Phân định câu cụt ngủn ('Ok', '✅', 'Hàng chất lượng'):** Được chuẩn hóa tiêu chí "
-                r"`informative = False` và gán nhãn `GENERAL` theo đúng `annotation_guideline.md`."
+                r"4. **Phân định câu cụt ngủn ('Ok', '✅', 'Hàng chất lượng'):** "
+                r"Được chuẩn hóa tiêu chí `informative = False` và gán nhãn `GENERAL` "
+                r"theo đúng `annotation_guideline.md`."
             ),
             "",
             "---",
             "",
             "## 4. Kết Luận Khoa Học & Ý Nghĩa Đối Với Hội Đồng",
             (
-                r"1. **Độ tin cậy cao ($\kappa \ge 0.75$):** Chứng minh bộ quy tắc `annotation_guideline.md` "
-                r"có ranh giới ngữ nghĩa rõ ràng, nhất quán qua thời gian ($\ge 7$ ngày)."
+                r"1. **Độ tin cậy cao ($\kappa \ge 0.75$):** Chứng minh bộ quy tắc "
+                r"`annotation_guideline.md` có ranh giới ngữ nghĩa rõ ràng, "
+                r"nhất quán qua thời gian ($\ge 7$ ngày)."
             ),
             (
                 r"2. **Nâng chuẩn dữ liệu vàng (`gold_v2.jsonl`):** Toàn bộ các ca bất đồng "

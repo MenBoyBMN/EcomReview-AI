@@ -116,7 +116,9 @@ ASPECT_HINTS: list[tuple[str, Aspect, list[str]]] = [
 
 def _match_keyword(kw: str, lower_t: str) -> bool:
     """Match keyword safely using word boundaries for short tokens."""
-    if kw == "vừa" and ("vừa phải" in lower_t or "vừa túi tiền" in lower_t or "vừa tiền" in lower_t):
+    if kw == "vừa" and (
+        "vừa phải" in lower_t or "vừa túi tiền" in lower_t or "vừa tiền" in lower_t
+    ):
         return False
     if len(kw) <= 4 and " " not in kw:
         return bool(re.search(rf"(?<!\w){re.escape(kw)}(?!\w)", lower_t))
@@ -133,7 +135,13 @@ def suggest_opinions(text: str, rating: int) -> tuple[list[dict], str, bool]:
     stripped_alpha = re.sub(r"[^a-zA-ZÀ-ỹ0-9]+", " ", lower_t).strip()
     if stripped_alpha in ("", "ok", "oke", "okay", "đúng ảnh") or clean_t in ("✅", "👍"):
         return (
-            [{"aspect": Aspect.GENERAL.value, "polarity": Polarity.NEU.value, "evidence": clean_t[:20] or "ok"}],
+            [
+                {
+                    "aspect": Aspect.GENERAL.value,
+                    "polarity": Polarity.NEU.value,
+                    "evidence": clean_t[:20] or "ok",
+                }
+            ],
             Polarity.NEU.value,
             False,
         )
@@ -160,22 +168,32 @@ def suggest_opinions(text: str, rating: int) -> tuple[list[dict], str, bool]:
     for _, aspect, keywords in ASPECT_HINTS:
         matched_kw = [kw for kw in keywords if _match_keyword(kw, lower_t)]
         if matched_kw:
-            # Skip spurious ACCESSIBILITY_DESIGN if review is purely negative waterproof complaint with "đúng mẫu mã"
+            # Skip spurious ACCESSIBILITY_DESIGN on pure waterproof complaints
             if aspect == Aspect.ACCESSIBILITY_DESIGN and has_real_leak:
                 continue
 
             pol = default_pol
-            if aspect == Aspect.PACKAGING_SHIPPING and ("giao hàng nhanh" in lower_t or "giao nhanh" in lower_t):
+            if aspect == Aspect.PACKAGING_SHIPPING and (
+                "giao hàng nhanh" in lower_t or "giao nhanh" in lower_t
+            ):
                 pol = Polarity.POS
             elif aspect == Aspect.MATERIAL_DURABILITY and (
-                "nhựa mỏng" in lower_t or "chưa biết có bền" in lower_t or "chưa đc tốt lắm" in lower_t
+                "nhựa mỏng" in lower_t
+                or "chưa biết có bền" in lower_t
+                or "chưa đc tốt lắm" in lower_t
             ):
                 pol = Polarity.NEU
             elif aspect == Aspect.WATERPROOF and (
-                "không thấm" in lower_t or "ít bị thấm" in lower_t or "k lo ướt" in lower_t or "chống thấm" in lower_t or "chống nước" in lower_t
+                "không thấm" in lower_t
+                or "ít bị thấm" in lower_t
+                or "k lo ướt" in lower_t
+                or "chống thấm" in lower_t
+                or "chống nước" in lower_t
             ):
                 pol = Polarity.POS
-            elif aspect == Aspect.WATERPROOF and ("bị thấm" in lower_t or "vô nước" in lower_t or "ngấm nước" in lower_t):
+            elif aspect == Aspect.WATERPROOF and (
+                "bị thấm" in lower_t or "vô nước" in lower_t or "ngấm nước" in lower_t
+            ):
                 pol = Polarity.NEG
 
             opinions.append(
