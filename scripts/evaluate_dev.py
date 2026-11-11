@@ -37,7 +37,7 @@ def load_jsonl(filepath: str | Path) -> list[dict]:
 def run_b2_oof_dev(
     public_train_path: Path, gold_dev: list[dict], seed: int = 42
 ) -> tuple[list[ReviewAnalysis], float]:
-    """Evaluate B2 on dev.jsonl using 5-fold out-of-fold predictions to prevent train=test overfit."""
+    """Evaluate B2 on dev.jsonl using 5-fold out-of-fold predictions."""
     kf = KFold(n_splits=5, shuffle=True, random_state=seed)
     oof_preds: list[ReviewAnalysis | None] = [None] * len(gold_dev)
     latencies: list[float] = []
@@ -158,20 +158,29 @@ def main():
             lats: list[float] = []
             for text in pub_val_texts:
                 st = time.perf_counter()
-                pred = b2.analyze_review(text, is_macro_track=True) if is_b2 else b1.analyze_review(text)
+                pred = (
+                    b2.analyze_review(text, is_macro_track=True)
+                    if is_b2
+                    else b1.analyze_review(text)
+                )
                 lats.append((time.perf_counter() - st) * 1000)
                 p_list.append(pred)
-            m_pub = evaluate_predictions(pub_val_records, p_list, texts=pub_val_texts, n_boot=1000, seed=42)
+            m_pub = evaluate_predictions(
+                pub_val_records, p_list, texts=pub_val_texts, n_boot=1000, seed=42
+            )
             ci_o = m_pub["overall_sentiment_ci"]
+            f1_str = f"{m_pub['overall_sentiment_f1']:.4f} [{ci_o[1]:.4f} - {ci_o[2]:.4f}]"
             pub_rows.append(
                 {
                     "Track": "Public Benchmark (val 200)",
                     "System": name,
-                    "Overall_F1": f"{m_pub['overall_sentiment_f1']:.4f} [{ci_o[1]:.4f} - {ci_o[2]:.4f}]",
+                    "Overall_F1": f1_str,
                     "Latency_ms": f"{sum(lats) / len(lats):.1f}",
                 }
             )
-        pd.DataFrame(pub_rows).to_csv(results_dir / "public_val_comparison_v1.csv", index=False, encoding="utf-8-sig")
+        pd.DataFrame(pub_rows).to_csv(
+            results_dir / "public_val_comparison_v1.csv", index=False, encoding="utf-8-sig"
+        )
         logger.info("Saved Public Benchmark val comparison to results/public_val_comparison_v1.csv")
 
     # 2. Save CSV comparison
@@ -244,7 +253,7 @@ def main():
     print("\n" + "=" * 80)
     print("BANG KET QUA SO SANH TREN TAP DEV (dev_comparison_v1.csv)")
     print("=" * 80)
-    print(df_results.to_markdown(index=False))
+    print(df_results.to_string(index=False))
     print("=" * 80)
 
 

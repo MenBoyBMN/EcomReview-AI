@@ -12,6 +12,57 @@ from ecomreview.normalize import normalize_social_text
 from ecomreview.schemas import Aspect, MacroAspect, ReviewAnalysis
 
 
+def _fast_cluster_bootstrap_macro_f1(
+    sample_true_list: Sequence[Sequence[Any]],
+    sample_pred_list: Sequence[Sequence[Any]],
+    n_boot: int = 2000,
+    seed: int = 42,
+) -> tuple[float, float]:
+    """Vectorized cluster-bootstrap 95% CI for Macro-F1 using exact confusion counts."""
+    n = len(sample_true_list)
+    all_labels = sorted(
+        {lbl for seq in sample_true_list for lbl in seq}
+        | {lbl for seq in sample_pred_list for lbl in seq}
+    )
+    c_len = len(all_labels)
+    if n == 0 or c_len == 0:
+        return 0.0, 0.0
+
+    lbl_to_idx = {lbl: i for i, lbl in enumerate(all_labels)}
+    tp_mat = np.zeros((n, c_len), dtype=np.float64)
+    fp_mat = np.zeros((n, c_len), dtype=np.float64)
+    fn_mat = np.zeros((n, c_len), dtype=np.float64)
+
+    for i in range(n):
+        for gt, pr in zip(sample_true_list[i], sample_pred_list[i]):
+            gi = lbl_to_idx[gt]
+            pi = lbl_to_idx[pr]
+            if gi == pi:
+                tp_mat[i, gi] += 1.0
+            else:
+                fn_mat[i, gi] += 1.0
+                fp_mat[i, pi] += 1.0
+
+    rng = np.random.default_rng(seed)
+    weights = np.zeros((n_boot, n), dtype=np.float64)
+    for b in range(n_boot):
+        idx = rng.integers(0, n, n)
+        weights[b] = np.bincount(idx, minlength=n)
+
+    tp_b = weights @ tp_mat
+    fp_b = weights @ fp_mat
+    fn_b = weights @ fn_mat
+
+    denom = 2.0 * tp_b + fp_b + fn_b
+    f1_per_class = np.divide(2.0 * tp_b, denom, out=np.zeros_like(denom), where=denom > 0)
+    active_classes = (tp_b + fp_b + fn_b) > 0
+    active_counts = np.maximum(active_classes.sum(axis=1), 1)
+    boot_scores = (f1_per_class * active_classes).sum(axis=1) / active_counts
+
+    low, high = np.percentile(boot_scores, [2.5, 97.5])
+    return float(low), float(high)
+
+
 def bootstrap_f1_ci(
     y_true: Sequence[Any],
     y_pred: Sequence[Any],
@@ -29,7 +80,6 @@ def bootstrap_f1_ci(
     Returns:
         tuple of (point_estimate, ci_low_2.5, ci_high_97.5).
     """
-    rng = np.random.default_rng(seed)
     y_t = np.asarray(y_true)
     y_p = np.asarray(y_pred)
     n = len(y_t)
@@ -41,11 +91,9 @@ def bootstrap_f1_ci(
     if n == 1:
         return point, point, point
 
-    boot_scores = [
-        f1_score(y_t[idx], y_p[idx], average="macro", zero_division=0)
-        for idx in (rng.integers(0, n, n) for _ in range(n_boot))
-    ]
-    low, high = np.percentile(boot_scores, [2.5, 97.5])
+    low, high = _fast_cluster_bootstrap_macro_f1(
+        [[x] for x in y_t], [[x] for x in y_p], n_boot=n_boot, seed=seed
+    )
     return point, float(low), float(high)
 
 
@@ -268,16 +316,9 @@ def evaluate_predictions(
     absa_e2e_pt = float(f1_score(absa_e2e_true, absa_e2e_pred, average="macro", zero_division=0))
 
     # Review-level cluster bootstrap for ABSA F1 to respect intra-review dependencies
-    rng = np.random.default_rng(seed)
-    absa_boot_scores = []
-    for _ in range(n_boot):
-        idx = rng.integers(0, n_samples, n_samples)
-        sample_true = [item for i in idx for item in review_absa_true[i]]
-        sample_pred = [item for i in idx for item in review_absa_pred[i]]
-        absa_boot_scores.append(
-            f1_score(sample_true, sample_pred, average="macro", zero_division=0)
-        )
-    absa_low, absa_high = np.percentile(absa_boot_scores, [2.5, 97.5])
+    absa_low, absa_high = _fast_cluster_bootstrap_macro_f1(
+        review_absa_true, review_absa_pred, n_boot=n_boot, seed=seed
+    )
 
     # 4. Evidence Quote Fidelity (%)
     if all_pred_evidences:

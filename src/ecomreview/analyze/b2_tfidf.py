@@ -7,6 +7,7 @@ Implements a Two-Tier training architecture:
 """
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -26,6 +27,7 @@ from ecomreview.schemas import (
 )
 
 
+@lru_cache(maxsize=8192)
 def tokenize_vietnamese(text: str) -> str:
     """Tokenize Vietnamese text using underthesea with fallback to whitespace."""
     norm = normalize_social_text(text, enable=True)
