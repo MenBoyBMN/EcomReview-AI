@@ -62,4 +62,24 @@ def test_week9_error_taxonomy_figures_and_video_exist() -> None:
     assert abs(float(rows[-1]["cumulative_pct"]) - 100.0) < 0.1
 
 
+def test_week10_submission_package_and_defense_qa_exist() -> None:
+    """Verify all Week 10 submission package files and 30 Q&A bank exist and pass audit."""
+    expected_w10 = [
+        Path("submission/01_BaoCao_EcomReview_AI.md"),
+        Path("submission/01_BaoCao_EcomReview_AI.html"),
+        Path("submission/01_BaoCao_EcomReview_AI.docx"),
+        Path("submission/02_Slide_BaoVe_EcomReview_AI.md"),
+        Path("submission/02_Slide_BaoVe_EcomReview_AI.pptx"),
+        Path("submission/03_Checklist_12_YeuCau.md"),
+        Path("docs/defense_qa_bank.md"),
+        Path("docs/mock_defense_notes.md"),
+    ]
+    for p in expected_w10:
+        assert p.exists(), f"Missing Week 10 deliverable: {p}"
+        assert p.stat().st_size > 500
+
+    qa_text = Path("docs/defense_qa_bank.md").read_text(encoding="utf-8")
+    assert "Câu 30:" in qa_text
+
+
 # CreBy: MenBoyBMN
