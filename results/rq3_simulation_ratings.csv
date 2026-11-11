@@ -1,0 +1,21 @@
+scenario_tag,scenario_name,system,blind_label,C1_specificity,C2_actionability,C3_data_relevance,C4_evidence_persuasiveness,C5_safety_realism,overall_rubric_score,preferred_in_ab
+S1,Khủng hoảng thấm nước đường may đáy quần (WATERPROOF Crisis),P0_Single_Prompt,Option_B,3.0,3.33,1.5,2.0,1.0,2.17,0
+S1,Khủng hoảng thấm nước đường may đáy quần (WATERPROOF Crisis),P1_Full_Proposed,Option_A,5.0,5.0,5.0,5.0,5.0,5.0,1
+S2,Bất cập kích cỡ khi đeo balo đi xe máy (FIT_SIZE Mismatch),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S2,Bất cập kích cỡ khi đeo balo đi xe máy (FIT_SIZE Mismatch),P1_Full_Proposed,Option_B,5.0,5.0,5.0,5.0,5.0,5.0,1
+S3,Mùi nhựa PVC nồng và bung cúc bấm (MATERIAL_DURABILITY Issue),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S3,Mùi nhựa PVC nồng và bung cúc bấm (MATERIAL_DURABILITY Issue),P1_Full_Proposed,Option_B,5.0,5.0,5.0,5.0,5.0,5.0,1
+S4,Kính chắn mưa mờ do quên bóc seal bảo vệ (COMFORT_USABILITY),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S4,Kính chắn mưa mờ do quên bóc seal bảo vệ (COMFORT_USABILITY),P1_Full_Proposed,Option_B,5.0,5.0,5.0,5.0,5.0,5.0,1
+S5,Cảm nhận giá bán cao so với phụ kiện đi kèm (PRICE_VALUE),P0_Single_Prompt,Option_B,3.0,3.33,1.5,2.0,1.0,2.17,0
+S5,Cảm nhận giá bán cao so với phụ kiện đi kèm (PRICE_VALUE),P1_Full_Proposed,Option_A,5.0,5.0,5.0,5.0,5.0,5.0,1
+S6,Rách túi đóng gói và giao nhầm màu áo mưa (PACKAGING_SHIPPING),P0_Single_Prompt,Option_B,3.0,3.33,1.5,2.0,1.0,2.17,0
+S6,Rách túi đóng gói và giao nhầm màu áo mưa (PACKAGING_SHIPPING),P1_Full_Proposed,Option_A,5.0,5.0,5.0,5.0,5.0,5.0,1
+S7,Phản hồi tin nhắn chậm khi khách cần đổi size (CUSTOMER_SERVICE),P0_Single_Prompt,Option_B,3.0,3.33,1.5,2.0,1.0,2.17,0
+S7,Phản hồi tin nhắn chậm khi khách cần đổi size (CUSTOMER_SERVICE),P1_Full_Proposed,Option_A,5.0,5.0,5.0,5.0,5.0,5.0,1
+S8,Điểm mạnh nổi bật về màu sắc Pastel Hàn Quốc (ACCESSIBILITY_DESIGN Strength),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S8,Điểm mạnh nổi bật về màu sắc Pastel Hàn Quốc (ACCESSIBILITY_DESIGN Strength),P1_Full_Proposed,Option_B,5.0,5.0,5.0,5.0,5.0,5.0,1
+S9,Phàn nàn ẩn trong nhóm đánh giá 4-5 sao (Hidden Complaints),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S9,Phàn nàn ẩn trong nhóm đánh giá 4-5 sao (Hidden Complaints),P1_Full_Proposed,Option_B,4.0,5.0,5.0,5.0,5.0,4.8,1
+S10,Chênh lệch chất lượng trải nghiệm giữa Shopee và TikTok Shop (Platform Gap),P0_Single_Prompt,Option_A,3.0,3.33,1.5,2.0,1.0,2.17,0
+S10,Chênh lệch chất lượng trải nghiệm giữa Shopee và TikTok Shop (Platform Gap),P1_Full_Proposed,Option_B,5.0,5.0,5.0,5.0,5.0,5.0,1
