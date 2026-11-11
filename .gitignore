@@ -42,11 +42,8 @@ results/traces/*
 !results/traces/.gitkeep
 *.log
 
-# Project reference materials
-Abount_System/
-
 # Temporary office and editor locks
 ~$*
 *.tmp
-
+Abount_System/*
 # CreBy: MenBoyBMN

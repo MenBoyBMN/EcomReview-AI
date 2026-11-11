@@ -1,4 +1,0 @@
-engine_mode,model_name,test_samples,overall_sentiment_f1,aspect_detection_f1,joint_absa_macro_f1,quote_fidelity_pct,numeric_consistency_pct,evidence_validity_pct,policy_claim_safety_pct,critic_pass_rate_pct,self_heal_retries_avg,cost_per_1k_reviews_usd
-gemini,Gemini 2.5 Flash (Cloud API),50,0.8248,0.9066,0.6665,97.4,100.0,100.0,100.0,100.0,0.00,0.05
-ollama,Qwen2.5-7B-Instruct (Local AI),50,0.7640,0.8520,0.6120,94.0,100.0,100.0,100.0,100.0,0.18,0.00
-

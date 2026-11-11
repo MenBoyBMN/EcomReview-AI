@@ -79,10 +79,12 @@ python -m ruff format . --check
 ---
 
 ## 📂 Tài Liệu Kỹ Thuật & Báo Cáo Nghiên Cứu
-- **Kiến trúc hệ thống & ADR:** [`docs/architecture.md`](docs/architecture.md)
-- **Đặc tả 15 RESTful API Endpoints:** [`docs/api_reference.md`](docs/api_reference.md) và [`docs/openapi.json`](docs/openapi.json)
-- **Phân tích lỗi Pareto `E1–E10`:** [`docs/error_analysis.md`](docs/error_analysis.md)
-- **Case Study thực tế Shop Áo Mưa:** [`docs/case_study_shop_aomua.md`](docs/case_study_shop_aomua.md)
-- **Báo cáo toàn văn & Slide bảo vệ:** Thư mục [`submission/`](submission/)
+- **Kiến trúc hệ thống & ADR:** [`Abount_System/docs/architecture.md`](Abount_System/docs/architecture.md)
+- **Đặc tả 15 RESTful API Endpoints:** [`Abount_System/docs/api_reference.md`](Abount_System/docs/api_reference.md) và [`Abount_System/docs/openapi.json`](Abount_System/docs/openapi.json)
+- **Phân tích lỗi Pareto `E1–E10`:** [`Abount_System/docs/error_analysis.md`](Abount_System/docs/error_analysis.md)
+- **Case Study thực tế Shop Áo Mưa:** [`Abount_System/docs/case_study_shop_aomua.md`](Abount_System/docs/case_study_shop_aomua.md)
+- **Báo cáo toàn văn & Slide bảo vệ:** Thư mục [`Abount_System/submission/`](Abount_System/submission/)
+- **Video Demo nghiệm thu:** Thư mục [`Abount_System/demo/`](Abount_System/demo/)
+- **Đề bài & Quản lý tiến độ:** Thư mục [`Abount_System/`](Abount_System/)
 
 <!-- CreBy: MenBoyBMN -->

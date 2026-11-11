@@ -27,7 +27,12 @@ def ingest_real_shop_data(db: DatabaseManager | None = None) -> list[dict]:
     job_id = db_mgr.log_job_start("import", {"scenario_tag": "real_shop"})
 
     gold_v2_path = Path("data/gold/gold_v2.jsonl")
+    if not gold_v2_path.exists():
+        gold_v2_path = Path("Abount_System/data/gold/gold_v2.jsonl")
+
     syn_dev_path = Path("data/gold/synthetic_dev.jsonl")
+    if not syn_dev_path.exists():
+        syn_dev_path = Path("Abount_System/data/gold/synthetic_dev.jsonl")
 
     records = []
     if gold_v2_path.exists():
@@ -94,7 +99,7 @@ def ingest_real_shop_data(db: DatabaseManager | None = None) -> list[dict]:
     )
 
     # Export docs/insights_real_shop.md (Task 5.6)
-    doc_path = Path("docs/insights_real_shop.md")
+    doc_path = Path("Abount_System/docs/insights_real_shop.md")
     lines = [
         "# Báo Cáo Insights Thực Tế Shop Áo Mưa (`scenario_tag = real_shop`)",
         "",
