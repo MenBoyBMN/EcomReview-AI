@@ -111,9 +111,10 @@ def ingest_real_shop_data(db: DatabaseManager | None = None) -> list[dict]:
         conf_str = ins["confidence"].upper()
         nums_str = json.dumps(ins["numbers"], ensure_ascii=False)
         ev_str = ", ".join(ins["evidence_ids"])
+        hdr = f"## {idx}. [{ins['kind']}] Khía cạnh: `{ins['aspect']}` (Độ tin cậy: `{conf_str}`)"
         lines.extend(
             [
-                f"## {idx}. [{ins['kind']}] Khía cạnh: `{ins['aspect']}` (Độ tin cậy: `{conf_str}`)",
+                hdr,
                 f"- **Nhận định:** {ins['statement']}",
                 f"- **Số liệu gốc (`numbers`):** `{nums_str}`",
                 f"- **Mã đánh giá bằng chứng (`evidence_ids`):** `{ev_str}`",

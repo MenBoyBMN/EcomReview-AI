@@ -1,0 +1,1888 @@
+[
+  {
+    "scenario_tag": "S1",
+    "scenario_name": "Khủng hoảng thấm nước đường may đáy quần (WATERPROOF Crisis)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 83% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s1_rev_001",
+            "s1_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 38% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s1_rev_002",
+            "s1_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s1_rev_001",
+            "s1_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 3,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Khả năng chống thấm nước (WATERPROOF): Trong tổng số 18 phản hồi, có 14 ý kiến phàn nàn (77.8%, khoảng tin cậy 95% CI từ 54.8% đến 91.0%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s1_rev_010",
+            "s1_rev_011",
+            "s1_rev_012",
+            "s1_rev_013"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật hướng dẫn gài nẹp chắn nước 2 lớp trên ảnh mô tả sản phẩm",
+          "description": "Bổ sung Infographic ở ảnh số 3 trên Shopee/TikTok hướng dẫn khách kéo khóa trong và bấm kín hàng cúc bấm nẹp ngoài để tránh nước tạt ngang khi đi xe máy.",
+          "what_to_do": "Bổ sung Infographic ở ảnh số 3 trên Shopee/TikTok hướng dẫn khách kéo khóa trong và bấm kín hàng cúc bấm nẹp ngoài để tránh nước tạt ngang khi đi xe máy.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Khả năng chống thấm nước (WATERPROOF): Trong tổng số 18 phản hồi, có 14 ý kiến phàn nàn (77.8%, khoảng tin cậy 95% CI từ 54.8% đến 91.0%).",
+          "how_and_when": "Thiết kế và cập nhật lên trang sản phẩm trong vòng 24h.",
+          "success_metric": "Giảm câu hỏi/phàn nàn về nước tạt qua khóa kéo ít nhất 20% sau 2 tuần.",
+          "target_metric": "Giảm câu hỏi/phàn nàn về nước tạt qua khóa kéo ít nhất 20% sau 2 tuần.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "HIGH",
+          "priority_score": 3.56,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s1_rev_010",
+            "s1_rev_011",
+            "s1_rev_012",
+            "s1_rev_013"
+          ]
+        },
+        {
+          "action_id": "act_003",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": false,
+          "title": "Gia cố băng keo ép nhiệt đường may đáy quần và nẹp khóa kéo",
+          "description": "Kiểm tra lô hàng tồn kho và yêu cầu xưởng tăng nhiệt độ ép seam tape PVC/PU tại đường may ngã tư đáy quần và dọc nẹp che khóa kéo ngực.",
+          "what_to_do": "Kiểm tra lô hàng tồn kho và yêu cầu xưởng tăng nhiệt độ ép seam tape PVC/PU tại đường may ngã tư đáy quần và dọc nẹp che khóa kéo ngực.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Khả năng chống thấm nước (WATERPROOF): Trong tổng số 18 phản hồi, có 14 ý kiến phàn nàn (77.8%, khoảng tin cậy 95% CI từ 54.8% đến 91.0%).",
+          "how_and_when": "Thực hiện kiểm định ngẫu nhiên 20 mẫu dưới vòi xịt áp lực trong vòng 48h trước khi xuất kho lô mới.",
+          "success_metric": "Giảm tỷ lệ phàn nàn thấm nước đường may xuống dưới 15% trong 14 ngày tới.",
+          "target_metric": "Giảm tỷ lệ phàn nàn thấm nước đường may xuống dưới 15% trong 14 ngày tới.",
+          "effort": "HIGH",
+          "impact": "HIGH",
+          "priority": "MEDIUM",
+          "priority_score": 2.42,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s1_rev_010",
+            "s1_rev_011",
+            "s1_rev_012",
+            "s1_rev_013"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S2",
+    "scenario_name": "Bất cập kích cỡ khi đeo balo đi xe máy (FIT_SIZE Mismatch)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 73% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s2_rev_001",
+            "s2_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 38% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s2_rev_002",
+            "s2_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s2_rev_001",
+            "s2_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Chuẩn hóa bảng quy đổi Size theo chiều cao, cân nặng và nhu cầu đeo balo",
+          "description": "Cập nhật bảng Size khuyên dùng tăng 1 size (từ XL lên 2XL) cho khách cao trên 1m68 hoặc thường xuyên đeo balo laptop khi đi xe máy.",
+          "what_to_do": "Cập nhật bảng Size khuyên dùng tăng 1 size (từ XL lên 2XL) cho khách cao trên 1m68 hoặc thường xuyên đeo balo laptop khi đi xe máy.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Kích cỡ & Độ vừa vặn (FIT_SIZE): Trong tổng số 18 phản hồi, có 12 ý kiến phàn nàn (66.7%, khoảng tin cậy 95% CI từ 43.7% đến 83.7%).",
+          "how_and_when": "Chỉnh sửa ảnh bảng Size và phần mô tả sản phẩm trong vòng 24h.",
+          "success_metric": "Giảm tỷ lệ đổi trả/phàn nàn do chật hoặc ngắn tà áo xuống dưới 10% trong 14 ngày.",
+          "target_metric": "Giảm tỷ lệ đổi trả/phàn nàn do chật hoặc ngắn tà áo xuống dưới 10% trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 5.0,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s2_rev_010",
+            "s2_rev_011",
+            "s2_rev_012",
+            "s2_rev_001"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Kích cỡ & Độ vừa vặn (FIT_SIZE): Trong tổng số 18 phản hồi, có 12 ý kiến phàn nàn (66.7%, khoảng tin cậy 95% CI từ 43.7% đến 83.7%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s2_rev_010",
+            "s2_rev_011",
+            "s2_rev_012",
+            "s2_rev_001"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S3",
+    "scenario_name": "Mùi nhựa PVC nồng và bung cúc bấm (MATERIAL_DURABILITY Issue)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 71% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s3_rev_001",
+            "s3_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 51% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s3_rev_002",
+            "s3_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s3_rev_001",
+            "s3_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 13 ý kiến phàn nàn (72.2%, khoảng tin cậy 95% CI từ 49.1% đến 87.5%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s3_rev_010",
+            "s3_rev_011",
+            "s3_rev_012",
+            "s3_rev_013"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "OPS",
+          "is_marketing": false,
+          "title": "Khử mùi nhựa PVC/PU và kiểm tra độ bền khuy bấm trước khi đóng gói",
+          "description": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "what_to_do": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 13 ý kiến phàn nàn (72.2%, khoảng tin cậy 95% CI từ 49.1% đến 87.5%).",
+          "how_and_when": "Áp dụng ngay cho quy trình QC đầu vào trong vòng 48h.",
+          "success_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "target_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "effort": "MEDIUM",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 3.44,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s3_rev_010",
+            "s3_rev_011",
+            "s3_rev_012",
+            "s3_rev_013"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S4",
+    "scenario_name": "Kính chắn mưa mờ do quên bóc seal bảo vệ (COMFORT_USABILITY)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 64% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s4_rev_001",
+            "s4_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 44% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s4_rev_002",
+            "s4_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s4_rev_001",
+            "s4_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Sự tiện dụng & Thoáng khí (COMFORT_USABILITY): Trong tổng số 18 phản hồi, có 11 ý kiến phàn nàn (61.1%, khoảng tin cậy 95% CI từ 38.6% đến 79.7%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s4_rev_010",
+            "s4_rev_011",
+            "s4_rev_001",
+            "s4_rev_002"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Gửi kèm thẻ hướng dẫn bóc lớp màng bảo vệ kính chắn mưa",
+          "description": "In thẻ hướng dẫn nhỏ đặt trong túi áo mưa nhắc khách bóc lớp nilon mờ bảo vệ 2 mặt kính chắn nước trước khi sử dụng.",
+          "what_to_do": "In thẻ hướng dẫn nhỏ đặt trong túi áo mưa nhắc khách bóc lớp nilon mờ bảo vệ 2 mặt kính chắn nước trước khi sử dụng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Sự tiện dụng & Thoáng khí (COMFORT_USABILITY): Trong tổng số 18 phản hồi, có 11 ý kiến phàn nàn (61.1%, khoảng tin cậy 95% CI từ 38.6% đến 79.7%).",
+          "how_and_when": "Triển khai đính kèm vào mọi đơn hàng xuất kho trong vòng 72h.",
+          "success_metric": "Loại bỏ 80% hiểu lầm rằng kính chắn mưa bị mờ/trầy xước trong 2 tuần.",
+          "target_metric": "Loại bỏ 80% hiểu lầm rằng kính chắn mưa bị mờ/trầy xước trong 2 tuần.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "HIGH",
+          "priority_score": 3.22,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s4_rev_010",
+            "s4_rev_011",
+            "s4_rev_001",
+            "s4_rev_002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S5",
+    "scenario_name": "Cảm nhận giá bán cao so với phụ kiện đi kèm (PRICE_VALUE)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 72% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s5_rev_001",
+            "s5_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 42% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s5_rev_002",
+            "s5_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s5_rev_001",
+            "s5_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Giá cả & Độ đáng tiền (PRICE_VALUE): Trong tổng số 18 phản hồi, có 10 ý kiến phàn nàn (55.6%, khoảng tin cậy 95% CI từ 33.7% đến 75.4%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s5_rev_010",
+            "s5_rev_001",
+            "s5_rev_002",
+            "s5_rev_003"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "PROMOTION",
+          "is_marketing": true,
+          "title": "Thiết lập Combo Mua 2 Giảm 10% kèm túi đựng chống thấm cùng màu",
+          "description": "Tạo chương trình Mua kèm Deal sốc / Combo 2 áo mưa gia đình để gia tăng cảm nhận giá trị tương xứng với mức giá bán.",
+          "what_to_do": "Tạo chương trình Mua kèm Deal sốc / Combo 2 áo mưa gia đình để gia tăng cảm nhận giá trị tương xứng với mức giá bán.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Giá cả & Độ đáng tiền (PRICE_VALUE): Trong tổng số 18 phản hồi, có 10 ý kiến phàn nàn (55.6%, khoảng tin cậy 95% CI từ 33.7% đến 75.4%).",
+          "how_and_when": "Cấu hình trên Kênh Người Bán Shopee và TikTok Seller Center trong vòng 24h.",
+          "success_metric": "Tăng giá trị đơn hàng trung bình (AOV) thêm 15% trong 7 ngày.",
+          "target_metric": "Tăng giá trị đơn hàng trung bình (AOV) thêm 15% trong 7 ngày.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "HIGH",
+          "priority_score": 3.11,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s5_rev_010",
+            "s5_rev_001",
+            "s5_rev_002",
+            "s5_rev_003"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S6",
+    "scenario_name": "Rách túi đóng gói và giao nhầm màu áo mưa (PACKAGING_SHIPPING)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 84% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s6_rev_001",
+            "s6_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 39% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s6_rev_002",
+            "s6_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s6_rev_001",
+            "s6_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Đóng gói & Giao hàng (PACKAGING_SHIPPING): Trong tổng số 18 phản hồi, có 12 ý kiến phàn nàn (66.7%, khoảng tin cậy 95% CI từ 43.7% đến 83.7%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s6_rev_010",
+            "s6_rev_011",
+            "s6_rev_012",
+            "s6_rev_001"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "OPS",
+          "is_marketing": false,
+          "title": "Nâng cấp túi đóng gói PE 2 lớp chống rách và đối soát mã màu bằng máy quét",
+          "description": "Sử dụng túi niêm phong PE dày hơn và quét barcode phân loại màu/size trước khi dán vận đơn để chấm dứt lỗi giao nhầm màu.",
+          "what_to_do": "Sử dụng túi niêm phong PE dày hơn và quét barcode phân loại màu/size trước khi dán vận đơn để chấm dứt lỗi giao nhầm màu.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Đóng gói & Giao hàng (PACKAGING_SHIPPING): Trong tổng số 18 phản hồi, có 12 ý kiến phàn nàn (66.7%, khoảng tin cậy 95% CI từ 43.7% đến 83.7%).",
+          "how_and_when": "Áp dụng tại bàn đóng gói kho vận trong vòng 48h.",
+          "success_metric": "Giảm tỷ lệ giao sai màu/rách bao bì xuống dưới 2% trong 14 ngày.",
+          "target_metric": "Giảm tỷ lệ giao sai màu/rách bao bì xuống dưới 2% trong 14 ngày.",
+          "effort": "MEDIUM",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 3.33,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s6_rev_010",
+            "s6_rev_011",
+            "s6_rev_012",
+            "s6_rev_001"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S7",
+    "scenario_name": "Phản hồi tin nhắn chậm khi khách cần đổi size (CUSTOMER_SERVICE)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 65% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s7_rev_001",
+            "s7_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 45% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s7_rev_002",
+            "s7_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s7_rev_001",
+            "s7_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Phản hồi cá nhân hóa và kích hoạt bảo hành đổi mới 1-1 cho đánh giá 1-3 sao",
+          "description": "Soạn phản hồi xin lỗi chân thành ngay dưới đánh giá tiêu cực và chủ động nhắn tin qua Chat của sàn để gửi bù sản phẩm mới hoặc đổi size miễn phí.",
+          "what_to_do": "Soạn phản hồi xin lỗi chân thành ngay dưới đánh giá tiêu cực và chủ động nhắn tin qua Chat của sàn để gửi bù sản phẩm mới hoặc đổi size miễn phí.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chăm sóc khách hàng (CUSTOMER_SERVICE): Trong tổng số 16 phản hồi, có 11 ý kiến phàn nàn (68.8%, khoảng tin cậy 95% CI từ 44.4% đến 85.8%).",
+          "how_and_when": "Xử lý toàn bộ đánh giá tiêu cực tồn đọng trong vòng 24h.",
+          "success_metric": "Đạt 100% tỷ lệ phản hồi đánh giá tiêu cực trong 24h và cải thiện điểm đánh giá shop.",
+          "target_metric": "Đạt 100% tỷ lệ phản hồi đánh giá tiêu cực trong 24h và cải thiện điểm đánh giá shop.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 5.06,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s7_rev_010",
+            "s7_rev_011",
+            "s7_rev_001",
+            "s7_rev_002"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chăm sóc khách hàng (CUSTOMER_SERVICE): Trong tổng số 16 phản hồi, có 11 ý kiến phàn nàn (68.8%, khoảng tin cậy 95% CI từ 44.4% đến 85.8%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s7_rev_010",
+            "s7_rev_011",
+            "s7_rev_001",
+            "s7_rev_002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S8",
+    "scenario_name": "Điểm mạnh nổi bật về màu sắc Pastel Hàn Quốc (ACCESSIBILITY_DESIGN Strength)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 68% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s8_rev_001",
+            "s8_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 43% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s8_rev_002",
+            "s8_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s8_rev_001",
+            "s8_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 2,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Màu sắc & Thiết kế (ACCESSIBILITY_DESIGN): Trong tổng số 20 phản hồi, có 2 ý kiến phàn nàn (10.0%, khoảng tin cậy 95% CI từ 2.8% đến 30.1%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s8_rev_001",
+            "s8_rev_002"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "CONTENT",
+          "is_marketing": true,
+          "title": "Làm nổi bật bộ sưu tập màu Pastel Hàn Quốc và dải phản quang an toàn ban đêm",
+          "description": "Đưa hình ảnh khách hàng thực tế mặc các màu Pastel thời trang lên đầu thư viện ảnh và nhấn mạnh tính năng dải phản quang sau lưng.",
+          "what_to_do": "Đưa hình ảnh khách hàng thực tế mặc các màu Pastel thời trang lên đầu thư viện ảnh và nhấn mạnh tính năng dải phản quang sau lưng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Màu sắc & Thiết kế (ACCESSIBILITY_DESIGN): Trong tổng số 20 phản hồi, có 2 ý kiến phàn nàn (10.0%, khoảng tin cậy 95% CI từ 2.8% đến 30.1%).",
+          "how_and_when": "Cập nhật bộ ảnh bìa và video ghim trong vòng 48h.",
+          "success_metric": "Tăng tỷ lệ nhấp (CTR) vào sản phẩm thêm 2% trong 14 ngày.",
+          "target_metric": "Tăng tỷ lệ nhấp (CTR) vào sản phẩm thêm 2% trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 3.3,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s8_rev_001",
+            "s8_rev_002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S9",
+    "scenario_name": "Phàn nàn ẩn trong nhóm đánh giá 4-5 sao (Hidden Complaints)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 74% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s9_rev_001",
+            "s9_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 49% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s9_rev_002",
+            "s9_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s9_rev_001",
+            "s9_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 3,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 10 ý kiến phàn nàn (55.6%, khoảng tin cậy 95% CI từ 33.7% đến 75.4%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s9_rev_010",
+            "s9_rev_001",
+            "s9_rev_002",
+            "s9_rev_003"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "OPS",
+          "is_marketing": false,
+          "title": "Khử mùi nhựa PVC/PU và kiểm tra độ bền khuy bấm trước khi đóng gói",
+          "description": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "what_to_do": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 10 ý kiến phàn nàn (55.6%, khoảng tin cậy 95% CI từ 33.7% đến 75.4%).",
+          "how_and_when": "Áp dụng ngay cho quy trình QC đầu vào trong vòng 48h.",
+          "success_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "target_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "effort": "MEDIUM",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 3.11,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s9_rev_010",
+            "s9_rev_001",
+            "s9_rev_002",
+            "s9_rev_003"
+          ]
+        },
+        {
+          "action_id": "act_003",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Chăm sóc chủ động nhóm khách chấm 4-5 sao nhưng góp ý về chất liệu/độ dày",
+          "description": "Gửi tin nhắn cảm ơn kèm mã giảm giá lần mua sau và hướng dẫn bảo quản áo mưa (không phơi nắng gắt, gấp gọn sau khi rũ khô) để tăng tuổi thọ vải.",
+          "what_to_do": "Gửi tin nhắn cảm ơn kèm mã giảm giá lần mua sau và hướng dẫn bảo quản áo mưa (không phơi nắng gắt, gấp gọn sau khi rũ khô) để tăng tuổi thọ vải.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Phát hiện 10 phàn nàn ẩn (55.6%) nằm trong nhóm 18 đánh giá 4-5 sao, tập trung vào khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY).",
+          "how_and_when": "Thiết lập tin nhắn tự động sau giao hàng thành công trong vòng 48h.",
+          "success_metric": "Tăng tỷ lệ khách hàng quay lại mua lần 2 thêm 10% trong 30 ngày.",
+          "target_metric": "Tăng tỷ lệ khách hàng quay lại mua lần 2 thêm 10% trong 30 ngày.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "HIGH",
+          "priority_score": 3.11,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s9_rev_001",
+            "s9_rev_002",
+            "s9_rev_003",
+            "s9_rev_004"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario_tag": "S10",
+    "scenario_name": "Chênh lệch chất lượng trải nghiệm giữa Shopee và TikTok Shop (Platform Gap)",
+    "P0_Baseline": {
+      "system": "P0_Single_Prompt",
+      "actions_count": 3,
+      "critic_passed": false,
+      "critic_score": 1.0,
+      "violations_count": 6,
+      "violations": [
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_1'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3', '4'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R4",
+          "action_id": "p0_act_001",
+          "message": "Vi phạm R4 (No Overclaiming): Phát hiện cụm từ cam kết quá mức 'chống thấm 100%' trong đề xuất hành động.",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_2'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3', '4'].",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R3",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R3 (Deadline Missing): Trường how_and_when ('Áp dụng cho các đợt hàng tiếp theo.') thiếu mốc thời gian cụ thể (24h, 48h, ngày, tuần).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R5",
+          "action_id": "p0_act_002",
+          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "auto_fixable": true
+        },
+        {
+          "rule_id": "R1",
+          "action_id": "p0_act_003",
+          "message": "Vi phạm R1 (Evidence Existence): insight_ids ['unverified_3'] không tồn tại trong tập Insights hợp lệ ['1', '2', '3', '4'].",
+          "auto_fixable": true
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "p0_act_001",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Cập nhật mô tả sản phẩm áo mưa chống thấm 100% trên gian hàng",
+          "description": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "what_to_do": "Sửa tiêu đề và mô tả sản phẩm nhấn mạnh cam kết chống thấm 100% để thu hút khách hàng mới.",
+          "why_rationale": "Khoảng 72% khách hàng quan tâm đến khả năng đi mưa lớn và chất lượng vải áo mưa.",
+          "how_and_when": "Triển khai cập nhật ngay khi có thời gian rảnh.",
+          "success_metric": "Tăng doanh số bán hàng.",
+          "target_metric": "Tăng doanh số bán hàng.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.5,
+          "insight_ids": [
+            "unverified_1"
+          ],
+          "evidence_review_ids": [
+            "s10_rev_001",
+            "s10_rev_002"
+          ]
+        },
+        {
+          "action_id": "p0_act_002",
+          "action_type": "PRODUCT_FIX",
+          "is_marketing": true,
+          "title": "Kiểm tra lại chất lượng đường may và kích thước áo mưa",
+          "description": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "what_to_do": "Nhắc bộ phận kho và xưởng chú ý kiểm tra kỹ đường may và size áo mưa trước khi giao cho khách.",
+          "why_rationale": "Ước tính có khoảng 52% đánh giá phàn nàn về đường may và form áo.",
+          "how_and_when": "Áp dụng cho các đợt hàng tiếp theo.",
+          "success_metric": "Giảm đánh giá 1 sao.",
+          "target_metric": "Giảm đánh giá 1 sao.",
+          "effort": "MEDIUM",
+          "impact": "MEDIUM",
+          "priority": "MEDIUM",
+          "priority_score": 1.3,
+          "insight_ids": [
+            "unverified_2"
+          ],
+          "evidence_review_ids": [
+            "s10_rev_002",
+            "s10_rev_003"
+          ]
+        },
+        {
+          "action_id": "p0_act_003",
+          "action_type": "REVIEW_REPLY",
+          "is_marketing": true,
+          "title": "Nhắn tin chăm sóc khách hàng đánh giá thấp",
+          "description": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "what_to_do": "Gửi tin nhắn xin lỗi khách hàng và đề xuất hoàn tiền hoặc đổi mới nếu khách gặp sản phẩm lỗi.",
+          "why_rationale": "Có nhiều khách hàng chưa hài lòng về trải nghiệm nhận hàng.",
+          "how_and_when": "Thực hiện định kỳ hàng tuần.",
+          "success_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "target_metric": "Cải thiện mức độ hài lòng của khách hàng.",
+          "effort": "LOW",
+          "impact": "LOW",
+          "priority": "LOW",
+          "priority_score": 1.1,
+          "insight_ids": [
+            "unverified_3"
+          ],
+          "evidence_review_ids": [
+            "s10_rev_001",
+            "s10_rev_002"
+          ]
+        }
+      ]
+    },
+    "P1_Proposed": {
+      "system": "P1_Evidence_Grounded_Critic_Graph",
+      "actions_count": 4,
+      "critic_passed": true,
+      "critic_score": 5.0,
+      "retries_used": 3,
+      "actions": [
+        {
+          "action_id": "act_001",
+          "action_type": "CUSTOMER_CARE",
+          "is_marketing": true,
+          "title": "Rà soát quy trình chăm sóc & cải thiện trải nghiệm GENERAL",
+          "description": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "what_to_do": "Kiểm tra toàn bộ phản hồi phàn nàn về GENERAL, liên hệ hỗ trợ khách hàng bị ảnh hưởng và cập nhật hướng dẫn sử dụng trên gian hàng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 9 ý kiến phàn nàn (50.0%, khoảng tin cậy 95% CI từ 29.0% đến 71.0%).",
+          "how_and_when": "Rà soát và phản hồi khách hàng trong vòng 24h.",
+          "success_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "target_metric": "Giảm 30% tỷ lệ phàn nàn lặp lại ở khía cạnh này trong 14 ngày.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.8,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s10_rev_001",
+            "s10_rev_002",
+            "s10_rev_003",
+            "s10_rev_004"
+          ]
+        },
+        {
+          "action_id": "act_002",
+          "action_type": "CONTENT",
+          "is_marketing": true,
+          "title": "Sản xuất video TikTok/Reels test độ dẻo dai vải dù tổ ong / da cá",
+          "description": "Quay video thực tế kéo căng vải áo mưa và thử nghiệm dưới mưa rào để làm nổi bật ưu điểm chất vải dày dặn, mềm mại được khách khen ngợi.",
+          "what_to_do": "Quay video thực tế kéo căng vải áo mưa và thử nghiệm dưới mưa rào để làm nổi bật ưu điểm chất vải dày dặn, mềm mại được khách khen ngợi.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Lợi thế cạnh tranh nổi bật ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Đạt 9/18 đánh giá tích cực (50.0%, khoảng tin cậy 95% CI từ 29.0% đến 71.0%), rất phù hợp làm nội dung video marketing.",
+          "how_and_when": "Đăng tải video lên kênh TikTok Shop và gắn vào đầu trang Shopee trong vòng 3 ngày.",
+          "success_metric": "Tăng tỷ lệ chuyển đổi (CR) trang sản phẩm thêm 1.5% trong 2 tuần.",
+          "target_metric": "Tăng tỷ lệ chuyển đổi (CR) trang sản phẩm thêm 1.5% trong 2 tuần.",
+          "effort": "LOW",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 4.5,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s10_rev_010",
+            "s10_rev_011",
+            "s10_rev_012",
+            "s10_rev_013"
+          ]
+        },
+        {
+          "action_id": "act_003",
+          "action_type": "LISTING_UPDATE",
+          "is_marketing": true,
+          "title": "Đồng bộ thông số định lượng vải (GSM) và độ dày giữa Shopee và TikTok Shop",
+          "description": "Rà soát và thống nhất mô tả độ dày vải (mm/GSM) trên cả hai sàn để tránh kỳ vọng sai lệch của khách mua qua livestream hoặc mô tả văn bản.",
+          "what_to_do": "Rà soát và thống nhất mô tả độ dày vải (mm/GSM) trên cả hai sàn để tránh kỳ vọng sai lệch của khách mua qua livestream hoặc mô tả văn bản.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 9 ý kiến phàn nàn (50.0%, khoảng tin cậy 95% CI từ 29.0% đến 71.0%).",
+          "how_and_when": "Rà soát và cập nhật đồng bộ trên cả 2 sàn trong vòng 24h.",
+          "success_metric": "Thu hẹp chênh lệch tỷ lệ phàn nàn giữa Shopee và TikTok xuống dưới 10% sau 2 tuần.",
+          "target_metric": "Thu hẹp chênh lệch tỷ lệ phàn nàn giữa Shopee và TikTok xuống dưới 10% sau 2 tuần.",
+          "effort": "LOW",
+          "impact": "MEDIUM",
+          "priority": "HIGH",
+          "priority_score": 3.2,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s10_rev_001",
+            "s10_rev_002",
+            "s10_rev_003",
+            "s10_rev_004"
+          ]
+        },
+        {
+          "action_id": "act_004",
+          "action_type": "OPS",
+          "is_marketing": false,
+          "title": "Khử mùi nhựa PVC/PU và kiểm tra độ bền khuy bấm trước khi đóng gói",
+          "description": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "what_to_do": "Phơi thoáng khí lô áo mưa mới sản xuất tại kho 24h để bay hết mùi nhựa nồng và kiểm tra lực bấm của hàng khuy nhựa/đồng.",
+          "why_rationale": "Căn cứ trực tiếp từ dữ liệu: Điểm đau cốt lõi cần xử lý ở khía cạnh Chất liệu & Độ bền (MATERIAL_DURABILITY): Trong tổng số 18 phản hồi, có 9 ý kiến phàn nàn (50.0%, khoảng tin cậy 95% CI từ 29.0% đến 71.0%).",
+          "how_and_when": "Áp dụng ngay cho quy trình QC đầu vào trong vòng 48h.",
+          "success_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "target_metric": "Giảm 50% phản hồi tiêu cực về mùi nhựa và bung cúc trong 7 ngày.",
+          "effort": "MEDIUM",
+          "impact": "HIGH",
+          "priority": "HIGH",
+          "priority_score": 3.0,
+          "insight_ids": [
+            1
+          ],
+          "evidence_review_ids": [
+            "s10_rev_001",
+            "s10_rev_002",
+            "s10_rev_003",
+            "s10_rev_004"
+          ]
+        }
+      ]
+    }
+  }
+]

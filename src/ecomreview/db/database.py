@@ -237,5 +237,112 @@ class DatabaseManager:
                     ),
                 )
 
+    def insert_action(
+        self,
+        scenario_tag: str,
+        action_type: str,
+        is_marketing: bool,
+        title: str,
+        what_to_do: str,
+        why_rationale: str,
+        how_and_when: str,
+        success_metric: str,
+        effort: str,
+        impact: str,
+        priority_score: float,
+        insight_ids: list[int | str],
+        evidence_review_ids: list[str],
+        critic_passed: bool = True,
+        critic_score: float = 5.0,
+        critic_violations: list[dict[str, Any]] | None = None,
+        retries: int = 0,
+        status: str = "PENDING",
+    ) -> int:
+        """Persist a verified ActionProposal into the actions table and return its row id."""
+        trace_obj = {
+            "critic_score": critic_score,
+            "retries": retries,
+            "violations": critic_violations or [],
+        }
+        with self.get_connection(read_only=False) as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO actions (
+                    scenario_tag, action_type, is_marketing, title,
+                    what_to_do, why_rationale, how_and_when, success_metric,
+                    effort, impact, priority_score, insight_ids,
+                    evidence_review_ids, critic_passed, critic_trace, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    scenario_tag,
+                    action_type,
+                    1 if is_marketing else 0,
+                    title,
+                    what_to_do,
+                    why_rationale,
+                    how_and_when,
+                    success_metric,
+                    effort,
+                    impact,
+                    priority_score,
+                    json.dumps([str(i) for i in insight_ids], ensure_ascii=False),
+                    json.dumps(list(evidence_review_ids), ensure_ascii=False),
+                    1 if critic_passed else 0,
+                    json.dumps(trace_obj, ensure_ascii=False),
+                    status,
+                    _now_iso(),
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
+    def record_action_decision(
+        self,
+        action_id: int,
+        decision: str,
+        note: str = "",
+        edited_content: str = "",
+        reason_category: str = "",
+    ) -> dict[str, Any]:
+        """Record human decision (APPROVED, EDITED, REJECTED) and compute edit distance."""
+        dec_upper = decision.strip().upper()
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT what_to_do FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
+            orig_text = str(row["what_to_do"]) if row else ""
+            edit_dist = (
+                abs(len(edited_content.strip()) - len(orig_text.strip()))
+                if edited_content.strip()
+                else 0
+            )
+            conn.execute(
+                "UPDATE actions SET status = ?, "
+                "what_to_do = COALESCE(NULLIF(?, ''), what_to_do) WHERE id = ?",
+                (dec_upper, edited_content.strip(), action_id),
+            )
+            cur = conn.execute(
+                """
+                INSERT INTO action_feedback (
+                    action_id, decision, reason_category, note, edited_content, decided_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    action_id,
+                    dec_upper,
+                    reason_category or f"edit_dist:{edit_dist}",
+                    note,
+                    edited_content,
+                    _now_iso(),
+                ),
+            )
+            feedback_id = int(cur.lastrowid or 0)
+        return {
+            "feedback_id": feedback_id,
+            "action_id": action_id,
+            "decision": dec_upper,
+            "edit_distance_chars": edit_dist,
+        }
+
 
 # CreBy: MenBoyBMN
