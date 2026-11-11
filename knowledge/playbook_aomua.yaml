@@ -171,5 +171,19 @@ playbook_rules:
     effort: "LOW"
     impact: "MEDIUM"
 
+reply_templates:
+  greeting: "Dạ Shop Áo Mưa xin chân thành cảm ơn Quý khách đã ủng hộ và gửi phản hồi cho sản phẩm."
+  aspect_handlers:
+    WATERPROOF: "Về vấn đề thấm nước hoặc đường may, Shop rất lấy làm tiếc vì sản phẩm chưa đạt kỳ vọng khi di chuyển mưa to. Shop xin phép hỗ trợ bảo hành đổi mới 1-1 miễn phí hoặc kiểm tra hỗ trợ ngay qua kênh Chat của sàn ạ."
+    MATERIAL_DURABILITY: "Về độ bền chất liệu và phụ liệu khóa kéo/nút bấm, Shop đã ghi nhận ý kiến để siết chặt tiêu chuẩn gia công cùng xưởng may và sẵn sàng gửi đổi sản phẩm mới nếu có lỗi vải."
+    FIT_SIZE: "Về kích cỡ và chiều dài che phủ, Shop xin rút kinh nghiệm để tư vấn bảng size chuẩn hơn khi ngồi xe máy hoặc mang balo. Shop luôn hỗ trợ đổi size linh hoạt qua tin nhắn Chat."
+    COMFORT_USABILITY: "Về độ tiện dụng và thoáng khí, Shop xin tiếp thu góp ý để cải tiến thiết kế mũ trùm, kính chắn nước và độ thông thoáng ở các lô sản xuất tiếp theo."
+    PRICE_VALUE: "Shop luôn nỗ lực tối ưu chất lượng tốt nhất trong tầm giá và rất mong có cơ hội phục vụ Quý khách chu đáo hơn ở những đơn hàng sau."
+    PACKAGING_SHIPPING: "Về khâu đóng gói và thời gian giao hàng, Shop xin chân thành xin lỗi vì trải nghiệm vận chuyển chưa trọn vẹn và đã làm việc lại với đơn vị vận chuyển để cải thiện tốc độ giao nhận."
+    CUSTOMER_SERVICE: "Shop chân thành xin lỗi vì sự chậm trễ hoặc thiếu sót trong quá trình tư vấn và cam kết phản hồi nhanh chóng nhất qua tin nhắn hỗ trợ."
+    ACCESSIBILITY_DESIGN: "Shop xin cảm ơn đóng góp quý báu về màu sắc và kiểu dáng để tiếp tục ra mắt thêm nhiều phiên bản tiện ích và thời trang hơn."
+    GENERAL: "Shop đã ghi nhận phản hồi và luôn sẵn sàng hỗ trợ Quý khách giải quyết mọi vấn đề phát sinh qua cổng Chat chính thức của sàn trong vòng 24h."
+  closing: "Chúc Quý khách luôn có những chuyến đi bình an và an tâm trong mùa mưa này ạ!"
+
 # CreBy: MenBoyBMN
 

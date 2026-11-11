@@ -153,8 +153,8 @@ class A1GeminiAnalyzer:
 
         self._last_was_cache_hit = False
 
-        # Fast circuit-breaker only if ALL models in pool are exhausted
-        if self.quota_exhausted and self.fallback_on_quota:
+        # Fast circuit-breaker if ALL models in pool are exhausted or API key is not configured
+        if (self.quota_exhausted or not self.api_key) and self.fallback_on_quota:
             from ecomreview.analyze.b1_rule import B1RuleAnalyzer
 
             if self._rule_analyzer is None:

@@ -215,4 +215,31 @@ class CriticReport(BaseModel):
     )
 
 
+class ReplyDraft(BaseModel):
+    """Structured customer service reply proposed by AI agent."""
+
+    reply_text: str = Field(
+        min_length=40,
+        max_length=600,
+        description="Polite, grounded customer care reply in Vietnamese",
+    )
+    addressed_aspects: list[Aspect] = Field(
+        default_factory=list,
+        description="List of domain aspects specifically addressed in this reply",
+    )
+    explanation: str = Field(
+        default="",
+        description="Brief rationale for tone and selected resolution pathway",
+    )
+
+
+class ReplyGuardrailReport(BaseModel):
+    """Verification results for customer care reply against platform policies and brand safety."""
+
+    passed: bool = Field(description="True if reply satisfies all G1-G6 safety rules")
+    violations: list[str] = Field(
+        default_factory=list, description="Descriptions of any detected policy violations"
+    )
+
+
 # CreBy: MenBoyBMN

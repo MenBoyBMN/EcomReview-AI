@@ -2,25 +2,29 @@
 
 import re
 
-# Regex patterns for Vietnamese phone numbers and emails
-PHONE_RE = re.compile(r"(?:\+84|0)[35789]\d{8}\b")
+# Regex patterns for Vietnamese phone numbers, emails, and external links
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?84|0)[\s.\-]?[35789](?:[\s.\-]?\d){8}(?!\d)")
 EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
+LINK_RE = re.compile(
+    r"(?:https?://|www\.)\S+|\b(?:zalo\.me|fb\.com|facebook\.com|m\.me)/\S+", re.IGNORECASE
+)
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def scrub_pii(text: str) -> str:
-    """Anonymize personally identifiable information (PII) such as phone numbers and emails.
+    """Anonymize personally identifiable information (PII) such as phone numbers, emails, and links.
 
     Args:
         text: Raw text potentially containing PII.
 
     Returns:
-        Cleaned text with phone numbers replaced by [PHONE] and emails by [EMAIL].
+        Cleaned text with phone numbers replaced by [PHONE], emails by [EMAIL], links by [LINK].
     """
     if not text:
         return ""
     cleaned = PHONE_RE.sub("[PHONE]", text)
-    return EMAIL_RE.sub("[EMAIL]", cleaned)
+    cleaned = EMAIL_RE.sub("[EMAIL]", cleaned)
+    return LINK_RE.sub("[LINK]", cleaned)
 
 
 def sanitize_for_llm(text: str, max_chars: int = 1500) -> str:

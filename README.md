@@ -24,8 +24,9 @@ cp .env.example .env
 # 2. Khởi chạy đồng thời 3 dịch vụ (PostgreSQL 16 + FastAPI Backend + Streamlit UI)
 docker compose up --build -d
 ```
-- **Giao diện Streamlit Dashboard (4 trang):** `http://localhost:8501`
-- **Tài liệu tương tác FastAPI Swagger UI (10 Endpoints):** `http://localhost:8000/docs`
+- **Giao diện Streamlit Dashboard (5 trang):** `http://localhost:8501`
+- **Tài liệu tương tác FastAPI Swagger UI (15 Endpoints):** `http://localhost:8000/docs`
+- **Tích hợp PostgreSQL 16 hoặc SQLite:** Tự động chuyển đổi qua `ECOMREVIEW_DB_BACKEND=postgres|sqlite`
 
 ### Cách 2: Khởi chạy trên Môi trường Python Cục bộ (`Local Virtualenv`)
 ```powershell
@@ -36,11 +37,24 @@ pip install -r requirements.txt
 
 # 2. Khởi tạo CSDL mẫu (nạp 150 đánh giá real_shop + 10 kịch bản S1..S10)
 python scripts/seed_demo.py
+python scripts/backfill_review_dates.py
 
 # 3. Khởi chạy FastAPI Backend (Terminal 1) và Streamlit Dashboard (Terminal 2)
 python -m uvicorn ecomreview.api.main:app --port 8000
 python -m streamlit run src/ecomreview/ui/app.py --server.port 8501
 ```
+
+---
+
+## 🛡️ Xác Thực & Bảo Mật API
+FastAPI hỗ trợ xác thực header qua `X-API-Key` (mặc định chấp nhận key cấu hình tại `ECOMREVIEW_API_KEY` hoặc `demo-key-12345` khi chạy local/demo) và định danh người duyệt qua `X-Reviewer` (ví dụ `chu_shop_aomua`).
+
+## 📊 5 Trang Dashboard Streamlit & Tính Năng Mới
+1. **Trang 1 — Tổng quan & Cảnh báo Sớm:** Tỷ lệ hài lòng, Wilson 95% CI, banner cảnh báo sớm (`two-proportion z-test`).
+2. **Trang 2 — Phân tích Khía cạnh & Xu hướng:** Biểu đồ xu hướng Plotly theo thời gian thực và so sánh Shopee vs TikTok Shop.
+3. **Trang 3 — Đề xuất Hành động & Phê duyệt:** Duyệt `Approve / Edit / Reject`, truy vết `decided_by` và đo lường can thiệp (`Intervention Impact`).
+4. **Trang 4 — Tra cứu Đánh giá & Bằng chứng:** Lọc bằng chứng, trích dẫn khách hàng và xem vết phân tích `ReviewAnalysis`.
+5. **Trang 5 — Hỗ Trợ CSKH & Nạp Dữ Liệu:** Trợ lý phản hồi khách hàng tuân thủ 6 Guardrails (`G1–G6`), nạp file CSV/Excel kéo-thả, và xuất Báo cáo Điều hành Excel 6 sheet (`.xlsx`) & HTML in ra PDF.
 
 ---
 
@@ -66,7 +80,7 @@ python -m ruff format . --check
 
 ## 📂 Tài Liệu Kỹ Thuật & Báo Cáo Nghiên Cứu
 - **Kiến trúc hệ thống & ADR:** [`docs/architecture.md`](docs/architecture.md)
-- **Đặc tả 10 RESTful API Endpoints:** [`docs/api_reference.md`](docs/api_reference.md) và [`docs/openapi.json`](docs/openapi.json)
+- **Đặc tả 15 RESTful API Endpoints:** [`docs/api_reference.md`](docs/api_reference.md) và [`docs/openapi.json`](docs/openapi.json)
 - **Phân tích lỗi Pareto `E1–E10`:** [`docs/error_analysis.md`](docs/error_analysis.md)
 - **Case Study thực tế Shop Áo Mưa:** [`docs/case_study_shop_aomua.md`](docs/case_study_shop_aomua.md)
 - **Báo cáo toàn văn & Slide bảo vệ:** Thư mục [`submission/`](submission/)

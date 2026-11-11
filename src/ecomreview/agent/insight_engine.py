@@ -313,6 +313,7 @@ class InsightEngine:
                             scenario_tag, kind, aspect, statement,
                             numbers, evidence_ids, confidence, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id
                         """,
                         (
                             ins["scenario_tag"],
@@ -325,7 +326,11 @@ class InsightEngine:
                             now_str,
                         ),
                     )
-                    ins["id"] = int(cur.lastrowid or 0)
+                    row = cur.fetchone()
+                    if row is not None:
+                        ins["id"] = int(row["id"] if isinstance(row, dict) else row[0])
+                    else:
+                        ins["id"] = int(cur.lastrowid or 0)
         else:
             for idx, ins in enumerate(insights, start=1):
                 ins["id"] = idx

@@ -7,16 +7,18 @@
 ```mermaid
 flowchart TB
     subgraph UI["Tầng Giao Diện (Streamlit + Plotly :8501)"]
-        P1["Trang 1: Executive Overview (Wilson 95% CI Error Bars)"]
-        P2["Trang 2: Evidence-Grounded Insights & Verbatim Quotes"]
+        P1["Trang 1: Executive Overview & Cảnh Báo Sớm"]
+        P2["Trang 2: Phân Tích Khía Cạnh & Xu Hướng Thời Gian"]
         P3["Trang 3: Action Center, R1-R7 Critic Trace & Human Approval Gate"]
-        P4["Trang 4: Review Explorer & CSKH Reply Assistant"]
+        P4["Trang 4: Review Explorer & Evidence Grounding"]
+        P5["Trang 5: CS Reply Assistant & Ingestion / Export"]
     end
 
-    subgraph API["Tầng Dịch Vụ Backend (FastAPI 10 Endpoints :8000)"]
+    subgraph API["Tầng Dịch Vụ Backend (FastAPI 15 Endpoints :8000)"]
         E1["/api/v1/reviews/upload & /analyze/run"]
-        E2["/api/v1/stats/overview & /insights"]
-        E3["/api/v1/actions/generate & /actions/{id}/decision"]
+        E2["/api/v1/stats/overview, /trends & /alerts"]
+        E3["/api/v1/actions/generate & /actions/{id}/decision & /impact"]
+        E4["/api/v1/reviews/{id}/reply-draft & /reports/export"]
         SG["Pure Python State-Graph (Planner <-> HybridCritic)"]
     end
 
@@ -32,32 +34,38 @@ flowchart TB
 
 ---
 
-## 3.12. Thiết Kế 10 RESTful Endpoints Chuẩn OpenAPI 3.1 (`src/ecomreview/api/main.py`)
+## 3.12. Thiết Kế 15 RESTful Endpoints Chuẩn OpenAPI 3.1 (`src/ecomreview/api/main.py`)
 
-Tầng Backend API (`docs/openapi.json`) cung cấp 10 điểm cuối (endpoints) bao phủ trọn vẹn vòng đời từ nạp dữ liệu thô đến phê duyệt hành động:
+Tầng Backend API (`docs/openapi.json`) cung cấp 15 điểm cuối (endpoints) bao phủ trọn vẹn vòng đời từ nạp dữ liệu thô đến phê duyệt hành động và kiểm soát tác động:
 
 | STT | Phương Thức & Đường Dẫn | Chức Năng Nghiệp Vụ & Bảo Mật |
 | :-: | :--- | :--- |
-| 1 | `GET /api/v1/health` | Kiểm tra trạng thái sống của API, kết nối CSDL và chế độ `demo_cache_mode`. |
+| 1 | `GET /api/v1/health` | Kiểm tra trạng thái sống của API, backend CSDL (`sqlite`/`postgres`) và chế độ `demo_cache_mode`. |
 | 2 | `POST /api/v1/reviews/upload` | Nạp lô đánh giá mới, tự động ẩn danh PII (`scrub_pii`) và chuẩn hóa ngôn ngữ mạng (`normalize_social_text`). |
-| 3 | `POST /api/v1/analyze/run` | Kích hoạt trích xuất ABSA và tổng hợp nhận định kinh doanh (`InsightEngine`) cho `scenario_tag`. |
+| 3 | `POST /api/v1/analyze/run` | Kích hoạt trích xuất ABSA (A1 Gemini v2 / B1 / B2 / B3), hỗ trợ bất đồng bộ `async_mode=true` (Background Job). |
 | 4 | `GET /api/v1/jobs/{job_id}` | Truy vấn trạng thái tiến trình và nhật ký kiểm toán từ bảng `system_jobs_audit`. |
 | 5 | `GET /api/v1/stats/overview` | Trả về KPI tổng quan, thống kê khía cạnh kèm **Khoảng tin cậy bất đối xứng Wilson 95% CI**, chênh lệch sàn và phàn nàn ẩn. |
 | 6 | `GET /api/v1/insights` | Truy xuất danh sách nhận định kinh doanh đã qua kiểm chứng số học `verify_numbers_in_statement`. |
 | 7 | `POST /api/v1/actions/generate` | Thực thi đồ thị trạng thái `EcomReviewGraphRunner` (`Planner ⇄ HybridCritic` + `Auto-Repair`). |
 | 8 | `GET /api/v1/actions` | Liệt kê các đề xuất hành động theo phân nhóm Marketing (`is_marketing = True`) hoặc Vận hành (`is_marketing = False`). |
-| 9 | `POST /api/v1/actions/{action_id}/decision` | Ghi nhận quyết định của chủ shop (`APPROVED`, `EDITED`, `REJECTED`) và tính khoảng cách chỉnh sửa ký tự (`edit_distance_chars`). |
-| 10 | `GET /api/v1/reviews` | Truy vấn đánh giá gốc và trích dẫn bằng chứng theo bộ lọc đa chiều (`platform`, `aspect`, `polarity`, `review_ids`). |
+| 9 | `POST /api/v1/actions/{action_id}/decision` | Ghi nhận quyết định của chủ shop (`APPROVED`, `EDITED`, `REJECTED`), lưu `decided_by` và tính `edit_distance_chars`. |
+| 10 | `GET /api/v1/reviews` | Truy vấn đánh giá gốc và trích dẫn bằng chứng (tối ưu hóa giải quyết dứt điểm N+1 query). |
+| 11 | `GET /api/v1/trends` | Trích xuất chuỗi thời gian xu hướng theo tháng/tuần/ngày và tỷ lệ phàn nàn theo khía cạnh. |
+| 12 | `GET /api/v1/alerts` | Cảnh báo sớm (`HIGH`/`MEDIUM`/`WATCH`) dựa trên kiểm định thống kê **two-proportion z-test** ($p < 0.05$). |
+| 13 | `POST /api/v1/reviews/{review_id}/reply-draft` | Trợ lý soạn thảo phản hồi CSKH tự động tuân thủ 6 Guardrails (`G1–G6`) bảo vệ chính sách sàn. |
+| 14 | `GET /api/v1/actions/{action_id}/impact` | Đo lường hiệu quả trước/sau khi can thiệp hành động marketing / sản phẩm (`Intervention Impact`). |
+| 15 | `GET /api/v1/reports/export` | Xuất Báo cáo Điều hành toàn diện dưới định dạng **Excel 6 sheet (`.xlsx`)** hoặc **HTML in PDF**. |
 
 ---
 
-## 3.13. Thiết Kế Giao Diện 4 Trang Trực Quan & Cơ Chế *Human-in-the-Loop Approval Gate*
+## 3.13. Thiết Kế Giao Diện 5 Trang Trực Quan & Cơ Chế *Human-in-the-Loop Approval Gate*
 
-Giao diện người dùng (`src/ecomreview/ui/app.py`) được thiết kế chuyên biệt cho chủ shop TMĐT với 4 trang chức năng:
-1. **Trang 1 — Tổng Quan Điều Hành (`Executive Overview`):** Hiển thị 4 thẻ chỉ số KPI chủ đạo và biểu đồ thanh ngang Plotly tích hợp **Thanh sai số bất đối xứng (Asymmetric Wilson 95% CI Error Bars)** (`err_plus = ci_high - neg_pct`, `err_minus = neg_pct - ci_low`), giúp chủ shop phân biệt ngay lập tức đâu là vấn đề chắc chắn có cỡ mẫu lớn và đâu là biến động ngẫu nhiên do ít mẫu.
-2. **Trang 2 — Nhận Định Có Căn Cứ (`Evidence-Grounded Insights`):** Trình bày 5 loại nhận định kinh doanh kèm huy hiệu xác thực số học (`Verified SQL Numbers`) và danh sách đánh giá gốc nguyên văn khi nhấp mở rộng.
-3. **Trang 3 — Trung Tâm Hành Động & Kiểm Định (`Action Center & Critic Trace`):** Tách biệt rõ tab **Hành động Marketing (`is_marketing = True`)** và **Hành động Sản phẩm/Vận hành (`is_marketing = False`)**, hiển thị điểm ưu tiên `priority_score`, vết kiểm định 7 quy tắc R1–R7, và 3 nút quyết định (`Approve`, `Edit & Approve`, `Reject`) lưu trực tiếp `edit_distance_chars` vào bảng `action_feedback` để đo lường mức độ hữu dụng thực tế của Agent.
-4. **Trang 4 — Tra Cứu Đánh Giá & Trợ Lý Phản Hồi CSKH (`Review Explorer & Reply Assistant`):** Cho phép lọc nhanh các đánh giá tiêu cực/ẩn trên Shopee và TikTok Shop kèm bản nháp phản hồi CSKH tuân thủ chính sách bảo hành đổi mới 1-1 trong 24h.
+Giao diện người dùng (`src/ecomreview/ui/app.py`) được thiết kế chuyên biệt cho chủ shop TMĐT với 5 trang chức năng:
+1. **Trang 1 — Tổng Quan Điều Hành & Cảnh Báo Sớm (`Executive Overview & Early Warning`):** Hiển thị 4 thẻ chỉ số KPI chủ đạo, biểu đồ thanh ngang Plotly tích hợp **Thanh sai số bất đối xứng (Asymmetric Wilson 95% CI Error Bars)** và hộp thông báo cảnh báo sớm phát hiện bùng phát lỗi bằng two-proportion z-test ($p < 0.05$).
+2. **Trang 2 — Phân Tích Khía Cạnh & Xu Hướng (`Aspect Trends & Platform Gap`):** Trực quan hóa xu hướng tỷ lệ tiêu cực theo thời gian thực (Plotly line charts) và ma trận so sánh khác biệt hành vi khách hàng giữa Shopee và TikTok Shop.
+3. **Trang 3 — Trung Tâm Hành Động & Kiểm Định (`Action Center & Critic Trace`):** Tách biệt rõ tab **Hành động Marketing (`is_marketing = True`)** và **Hành động Sản phẩm/Vận hành (`is_marketing = False`)**, hiển thị điểm ưu tiên `priority_score`, vết kiểm định 7 quy tắc R1–R7, đo lường can thiệp trước/sau (`Intervention Impact`) và 3 nút quyết định (`Approve`, `Edit & Approve`, `Reject`) kèm định danh người duyệt `decided_by`.
+4. **Trang 4 — Khám Phá Đánh Giá & Bằng Chứng (`Review Explorer & Evidence Grounding`):** Cho phép lọc nhanh các đánh giá tiêu cực/ẩn trên Shopee và TikTok Shop, kiểm tra trích dẫn nguyên văn và bằng chứng trích xuất.
+5. **Trang 5 — Hỗ Trợ CSKH & Nạp Dữ Liệu / Xuất Báo Cáo (`CS Reply Assistant & Ingest / Export`):** Trợ lý phản hồi khách hàng thông minh tuân thủ 6 Guardrails (`G1–G6`), bộ nạp file CSV/Excel kéo-thả, và công cụ xuất Báo cáo Điều hành Excel 6 sheet (`.xlsx`) cùng HTML tối ưu in PDF.
 
 ---
 

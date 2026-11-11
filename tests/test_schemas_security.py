@@ -104,14 +104,21 @@ class TestSecurity:
     """Test suite for security, prompt injection defense, and PII anonymization."""
 
     def test_scrub_pii_phone_and_email(self):
-        """Verify that phone numbers and emails are masked."""
-        raw = "Liên hệ mình qua 0987654321 hoặc +84912345678 và email test@gmail.com nhé"
+        """Verify that phone numbers, spaced/dotted numbers, emails, and links are masked."""
+        raw = (
+            "Liên hệ mình qua 0987654321 hoặc +84 912 345 678 hay 0912.345.678 "
+            "hoặc email test@gmail.com hoặc ghé zalo.me/0912345678 và https://shopee.vn/aomua nhé"
+        )
         scrubbed = scrub_pii(raw)
         assert "0987654321" not in scrubbed
-        assert "+84912345678" not in scrubbed
+        assert "0912 345 678" not in scrubbed
+        assert "0912.345.678" not in scrubbed
         assert "test@gmail.com" not in scrubbed
+        assert "zalo.me" not in scrubbed
+        assert "https://shopee.vn" not in scrubbed
         assert "[PHONE]" in scrubbed
         assert "[EMAIL]" in scrubbed
+        assert "[LINK]" in scrubbed
 
     def test_sanitize_for_llm_escapes_xml(self):
         """Verify that XML/HTML injection tags are escaped."""

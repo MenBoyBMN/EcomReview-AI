@@ -3,16 +3,16 @@ services:
     image: postgres:16-alpine
     container_name: ecomreview_db
     environment:
-      POSTGRES_USER: ecom_user
-      POSTGRES_PASSWORD: ecom_password
-      POSTGRES_DB: ecomreview
+      POSTGRES_USER: ${POSTGRES_USER:-ecom_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ecomreview}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./docker/db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ecom_user -d ecomreview"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecom_user} -d ${POSTGRES_DB:-ecomreview}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,8 +24,12 @@ services:
     container_name: ecomreview_api
     environment:
       DEMO_CACHE_MODE: "true"
+      ECOMREVIEW_DB_BACKEND: "postgres"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
+      DATABASE_URL_RO: "postgresql://ecom_agent_ro:agent_readonly_pass@db:5432/${POSTGRES_DB:-ecomreview}"
+      ECOMREVIEW_API_KEY: "${ECOMREVIEW_API_KEY:-}"
       ECOMREVIEW_SQLITE_PATH: "/app/data/ecomreview.db"
-      DATABASE_URL: "postgresql://ecom_user:ecom_password@db:5432/ecomreview"
+    command: sh -c "python scripts/migrate_sqlite_to_pg.py --if-empty && uvicorn ecomreview.api.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
     volumes:
@@ -42,6 +46,10 @@ services:
     container_name: ecomreview_ui
     environment:
       DEMO_CACHE_MODE: "true"
+      ECOMREVIEW_DB_BACKEND: "postgres"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
+      DATABASE_URL_RO: "postgresql://ecom_agent_ro:agent_readonly_pass@db:5432/${POSTGRES_DB:-ecomreview}"
+      ECOMREVIEW_API_KEY: "${ECOMREVIEW_API_KEY:-}"
       ECOMREVIEW_SQLITE_PATH: "/app/data/ecomreview.db"
       API_BASE_URL: "http://api:8000"
     ports:
@@ -50,10 +58,12 @@ services:
       - ./data:/app/data
       - ./results:/app/results
     depends_on:
-      - api
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
 
 volumes:
   pgdata:
 
 # CreBy: MenBoyBMN
-

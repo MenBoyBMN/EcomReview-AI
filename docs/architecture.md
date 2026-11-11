@@ -13,17 +13,20 @@ flowchart LR
     end
 
     subgraph UIContainer["Container 1: Streamlit Dashboard (Port 8501)"]
-        P1["Trang 1: Tổng Quan & Wilson 95% CI"]
-        P2["Trang 2: Khám Phá Đánh Giá & Bằng Chứng"]
-        P3["Trang 3: Kế Hoạch Hành Động & Duyệt HITL"]
-        P4["Trang 4: Nạp Dữ Liệu & Trace Kiểm Định"]
+        P1["Trang 1: Tổng Quan & Cảnh Báo Sớm"]
+        P2["Trang 2: Phân Tích Khía Cạnh & Xu Hướng"]
+        P3["Trang 3: Đề Xuất Hành Động & Phê Duyệt HITL"]
+        P4["Trang 4: Khám Phá Đánh Giá & Bằng Chứng"]
+        P5["Trang 5: Hỗ Trợ CSKH & Nạp Dữ Liệu"]
     end
 
     subgraph APIContainer["Container 2: FastAPI Backend & Agent Engine (Port 8000)"]
-        API["10 RESTful Endpoints (OpenAPI 3.1)"]
+        API["15 RESTful Endpoints (OpenAPI 3.1)"]
         SEC["Security Filter (PII Scrub + XML Escape)"]
-        ABSA["ABSA Engine (B1 / B2 / B3 / A1 Gemini / Local Ollama)"]
+        ABSA["ABSA Engine (A1 Gemini v2 / B1 / B2 / B3 / Local Ollama)"]
         GRAPH["Pure Python State-Graph (Aggregator -> Insight -> Planner <-> Critic R1-R7)"]
+        REP["Reporting Engine (Excel 6 sheets & HTML PDF)"]
+        CS["CS Reply Assistant (Guardrails G1-G6)"]
     end
 
     subgraph DataLayer["Container 3: Storage & Knowledge Layer"]
@@ -107,6 +110,7 @@ erDiagram
         string scenario_tag
         string overall_sentiment
         boolean informative
+        string created_at
     }
     OPINIONS {
         int id PK
@@ -151,6 +155,7 @@ erDiagram
         string reason_category
         string note
         string edited_content
+        string decided_by
     }
     SYSTEM_JOBS_AUDIT {
         int id PK
@@ -170,6 +175,8 @@ erDiagram
 | **ADR-02** | **SQL Aggregator + Wilson 95% CI** tính toán 100% số liệu trước LLM | Đưa toàn bộ review vào prompt để LLM tự đếm | Triệt tiêu 100% ảo giác số học (`Zero Numeric Hallucination`) và phản ánh trung thực độ bất định thống kê khi cỡ mẫu khía cạnh nhỏ. |
 | **ADR-03** | **Hybrid Critic (7 Luật Python R1–R7 + Auto-Repair)** | Chỉ dùng LLM-as-a-Judge | Luật Python xác định bắt trúng 100% lỗi số học/chính sách trong `< 2 ms` với chi phí `$0.00`, không bị thiên kiến đồng thuận của LLM. |
 | **ADR-04** | **Dual-Engine DB (PostgreSQL 16 + SQLite Fallback)** & `DEMO_CACHE_MODE` | Chỉ hỗ trợ PostgreSQL & bắt buộc gọi mạng | Đảm bảo hệ thống chạy mượt mà 100% cả trong môi trường Docker Production lẫn khi kiểm thử cục bộ / bảo vệ đồ án không cần Internet. |
+| **ADR-05** | **Early Warning via Two-Proportion Z-Test** thay vì LLM Trend Detection | Cho LLM đọc bảng dữ liệu thời gian | Phát hiện bùng phát lỗi sản phẩm có ý nghĩa thống kê ($p < 0.05$), tránh báo động giả từ biến động ngẫu nhiên của các mẫu nhỏ. |
+| **ADR-06** | **CS Reply Assistant với 6 Guardrails (G1–G6)** | Prompt LLM tự do sinh lời đáp | Đảm bảo phản hồi khách hàng 100% an toàn trước chính sách sàn Shopee/TikTok (chống hối lộ đổi sao, chống lộ hotline/kênh ngoài sàn, chống hứa hẹn tiền bồi hoàn vượt thẩm quyền). |
 
 <!-- CreBy: MenBoyBMN -->
 

@@ -29,7 +29,7 @@
 3. **Bộ dữ liệu gán nhãn chất lượng cao & Phân tích lỗi Pareto `E1–E10` cho TMĐT Tiếng Việt:** Xây dựng bộ tiêu chuẩn gán nhãn 8 khía cạnh ngành Áo mưa đạt độ đồng thuận $\kappa = 0.8780$, phát hiện quy luật phàn nàn ẩn (`HIDDEN_COMPLAINT` chiếm `17.0%` trong nhóm 4–5 sao) và thiết lập bảng phân loại 10 nhóm lỗi chuẩn `E1–E10`.
 
 ### 5.2.2. Đóng Góp Về Mặt Kỹ Thuật & Sản Phẩm Thực Tiễn Cho SMEs
-1. **Hệ thống Full-Stack hoàn chỉnh, bảo mật 4 lớp & Đóng gói 1-Click:** Cung cấp dịch vụ Backend FastAPI (10 RESTful Endpoints chuẩn OpenAPI 3.1), giao diện Streamlit Dashboard 4 trang trực quan hóa thanh sai số Wilson 95% CI, cơ sở dữ liệu 6 bảng hỗ trợ `read_only=True` isolation và đóng gói Docker Compose (`db, api, ui`) kèm chế độ `DEMO_CACHE_MODE=true`.
+1. **Hệ thống Full-Stack hoàn chỉnh, bảo mật 4 lớp & Đóng gói 1-Click:** Cung cấp dịch vụ Backend FastAPI (15 RESTful Endpoints chuẩn OpenAPI 3.1), giao diện Streamlit Dashboard 5 trang trực quan hóa thanh sai số Wilson 95% CI và xu hướng theo chuỗi thời gian, hệ thống cảnh báo sớm phát hiện lỗi bằng kiểm định two-proportion z-test ($p < 0.05$), trợ lý phản hồi CSKH an toàn 6 Guardrails G1–G6, cơ sở dữ liệu 6 bảng hỗ trợ `read_only=True` isolation và đóng gói Docker Compose (`db, api, ui`) kèm chế độ `DEMO_CACHE_MODE=true` cùng bộ xuất báo cáo Excel 6 sheet / HTML in PDF.
 2. **Khả năng mở rộng linh hoạt sang Local AI (`Ollama + Qwen2.5-7B`) & Tri thức miền YAML:** Tách rời hoàn toàn tri thức miền (`playbook_aomua.yaml`, `vn_social_lexicon.yaml`) và hỗ trợ chuyển đổi linh hoạt giữa Cloud API (Gemini Flash) và Local AI miễn phí chạy nội bộ (Addon 11), giúp hộ kinh doanh nhỏ vận hành với chi phí tiệm cận `$0.00`.
 
 ---
@@ -37,8 +37,8 @@
 ## 5.3. Hạn Chế Của Nghiên Cứu (`Limitations`)
 
 1. **Cỡ mẫu của một số lát cắt hiếm trong tập kiểm thử miền mục tiêu:** Mặc dù tập dữ liệu tổng hợp có quy mô lớn ($N=2.200$ mẫu công khai + $245$ mẫu Shop Áo Mưa), một số lát cắt chuyên biệt như bình luận hoàn toàn không dấu (`Slice_NoDiacritics`, $n=9$) hoặc khía cạnh `CUSTOMER_SERVICE` có cỡ mẫu nhỏ, khiến khoảng tin cậy 95% CI rộng hơn các khía cạnh phổ biến.
-2. **Độ trễ khi gọi trực tiếp Cloud LLM API trên lô lớn:** Khi không sử dụng bộ nhớ đệm (`cache miss`), thời gian phản hồi trung bình của `A1-v2` qua mạng là `~6.3 giây/review`, đòi hỏi xử lý bất đồng bộ (`Background Jobs`) khi nạp hàng nghìn đánh giá cùng lúc.
-3. **Đánh giá hiệu quả kinh doanh dài hạn (A/B Testing doanh thu thực trên sàn):** Nghiên cứu tình huống trên Shop Áo Mưa đã đo lường trực tiếp mức tiết kiệm thời gian tác nghiệp (`~95%`) và tỷ lệ chấp nhận đề xuất (`96.55%`), nhưng việc đo lường mức tăng trưởng tỷ lệ chuyển đổi (`CR%`) và giảm tỷ lệ hoàn hàng ròng trên sàn cần thời gian theo dõi kéo dài qua nhiều mùa mưa (3–6 tháng).
+2. **Độ trễ khi gọi trực tiếp Cloud LLM API trên lô lớn:** Khi không sử dụng bộ nhớ đệm (`cache miss`), thời gian phản hồi trung bình của `A1-v2` qua mạng là `~6.3 giây/review`. Hệ thống đã giải quyết bài toán này bằng cơ chế tác vụ ngầm bất đồng bộ (`FastAPI BackgroundTasks` trả về HTTP `202 Accepted` kèm `job_id` kiểm toán trong bảng `system_jobs_audit`).
+3. **Đánh giá hiệu quả kinh doanh dài hạn (A/B Testing doanh thu thực trên sàn):** Nghiên cứu tình huống trên Shop Áo Mưa đã đo lường trực tiếp mức tiết kiệm thời gian tác nghiệp (`~95%`) và tỷ lệ chấp nhận đề xuất (`96.55%`), nhưng việc đo lường mức tăng trưởng tỷ lệ chuyển đổi (`CR%`) và giảm tỷ lệ hoàn hàng ròng trên sàn cần thời gian theo dõi kéo dài qua nhiều mùa mưa (3–6 tháng). Hệ thống đã đặt nền móng với endpoint `/api/v1/actions/{id}/impact` đo lường trước/sau can thiệp.
 
 ---
 

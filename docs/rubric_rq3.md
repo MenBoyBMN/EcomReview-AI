@@ -7,7 +7,7 @@ Tài liệu này định nghĩa **Rubric 5 tiêu chí (C1 – C5)** trên thang 
 ## 1. Quy Tắc Chấm Mù A/B (Blind A/B Protocol)
 
 - Trên mỗi kịch bản kinh doanh ($S_1 \dots S_{10}$), bộ đề xuất của hai hệ thống **`P0 (Single-Prompt Baseline)`** và **`P1 (Proposed State-Graph + HybridCritic)`** được chuẩn hóa về cùng một biểu mẫu hiển thị trung lập (ẩn hoàn toàn tên hệ thống, điểm Critic và siêu dữ liệu kỹ thuật).
-- Hai bộ đề xuất được xáo trộn ngẫu nhiên với `seed = 42` thành **Phương án A** và **Phương án B** trong tài liệu `results/blind_ab_pack.md`. Khóa giải mã được niêm phong riêng tại `results/secret_key.json`.
+- Hai bộ đề xuất được xáo trộn ngẫu nhiên với `seed = 42` thành **Phương án A** và **Phương án B** trong tài liệu `results/blind_ab_pack.md`. Khóa giải mã được niêm phong riêng tại `results/secret_key.json` (được lưu trữ công khai trong kho mã nguồn sau khi hoàn tất quy trình chấm độc lập nhằm đảm bảo tính minh bạch và khả năng tái lập khoa học 100% của bên thứ ba).
 - Người đánh giá (đóng vai chủ gian hàng Áo mưa trên Shopee / TikTok Shop) chấm điểm độc lập từng phương án theo 5 tiêu chí `C1 – C5` dưới đây và chọn phương án ưu tiên (`A`, `B`, hoặc `Tie`).
 
 ---

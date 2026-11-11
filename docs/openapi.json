@@ -3,7 +3,7 @@
   "info": {
     "title": "EcomReview AI API",
     "description": "Vietnamese Aspect-Based Sentiment Analysis & Evidence-Grounded Marketing Action Planning API for Raincoat E-Commerce SMEs.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -12,7 +12,7 @@
           "System"
         ],
         "summary": "Health Check",
-        "description": "1. Check API and database health status.",
+        "description": "1. Check API, database connection, and security configuration status.",
         "operationId": "health_check_api_v1_health_get",
         "responses": {
           "200": {
@@ -36,17 +36,35 @@
           "Ingestion"
         ],
         "summary": "Upload Reviews",
-        "description": "2. Upload and sanitize a batch of customer reviews.",
+        "description": "2. Upload, sanitize, analyze and persist a batch of customer reviews.",
         "operationId": "upload_reviews_api_v1_reviews_upload_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ReviewUploadRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -54,8 +72,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Upload Reviews Api V1 Reviews Upload Post"
                 }
               }
@@ -80,17 +98,35 @@
           "Analysis"
         ],
         "summary": "Run Analysis",
-        "description": "3. Run ABSA analysis and InsightEngine on a scenario.",
+        "description": "3. Run ABSA analysis and InsightEngine on a scenario (sync or async).",
         "operationId": "run_analysis_api_v1_analyze_run_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AnalyzeRunRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -98,8 +134,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
                   "title": "Response Run Analysis Api V1 Analyze Run Post"
                 }
               }
@@ -135,6 +169,22 @@
               "type": "integer",
               "title": "Job Id"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -169,7 +219,7 @@
           "Analytics"
         ],
         "summary": "Get Overview Stats",
-        "description": "5. Return executive KPIs, Wilson 95% CI aspect stats, and platform breakdown.",
+        "description": "5. Return executive KPIs, Wilson 95% CI aspect stats, and platform comparison.",
         "operationId": "get_overview_stats_api_v1_stats_overview_get",
         "parameters": [
           {
@@ -190,6 +240,22 @@
               "type": "integer",
               "default": 3,
               "title": "Min N"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           }
         ],
@@ -253,6 +319,22 @@
               ],
               "title": "Kind"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -289,15 +371,33 @@
         "summary": "Generate Actions",
         "description": "7. Execute the P1 State-Graph (Planner <-> HybridCritic) to generate grounded actions.",
         "operationId": "generate_actions_api_v1_actions_generate_post",
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ActionGenerateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -305,8 +405,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Generate Actions Api V1 Actions Generate Post"
                 }
               }
@@ -375,6 +475,22 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -409,7 +525,7 @@
           "Actions"
         ],
         "summary": "Submit Action Decision",
-        "description": "9. Record Human Approval Gate decision (APPROVED, EDITED, REJECTED) + edit distance.",
+        "description": "9. Record Human Approval Gate decision with edit distance and reviewer identity.",
         "operationId": "submit_action_decision_api_v1_actions__action_id__decision_post",
         "parameters": [
           {
@@ -419,6 +535,38 @@
             "schema": {
               "type": "integer",
               "title": "Action Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "X-Reviewer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Reviewer"
             }
           }
         ],
@@ -554,6 +702,22 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -566,6 +730,458 @@
                   "additionalProperties": true,
                   "title": "Response Query Reviews Api V1 Reviews Get"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get Trends",
+        "description": "11. Query historical sentiment trends grouped by week or month with Wilson 95% CI.",
+        "operationId": "get_trends_api_v1_trends_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "aspect",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aspect"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'month' or 'week'",
+              "default": "month",
+              "title": "Period"
+            },
+            "description": "'month' or 'week'"
+          },
+          {
+            "name": "min_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Min N"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Trends Api V1 Trends Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get Alerts",
+        "description": "12. Detect statistical spike alerts based on two-proportion one-sided z-test.",
+        "operationId": "get_alerts_api_v1_alerts_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "month",
+              "title": "Period"
+            }
+          },
+          {
+            "name": "baseline_periods",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Baseline Periods"
+            }
+          },
+          {
+            "name": "min_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "Min N"
+            }
+          },
+          {
+            "name": "min_delta_pp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 10.0,
+              "title": "Min Delta Pp"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Alerts Api V1 Alerts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/{review_id}/reply-draft": {
+      "post": {
+        "tags": [
+          "Customer Care"
+        ],
+        "summary": "Create Reply Draft",
+        "description": "13. Generate and verify a policy-compliant customer service reply draft.",
+        "operationId": "create_reply_draft_api_v1_reviews__review_id__reply_draft_post",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'template' or 'llm'",
+              "default": "template",
+              "title": "Mode"
+            },
+            "description": "'template' or 'llm'"
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Reply Draft Api V1 Reviews  Review Id  Reply Draft Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/{action_id}/impact": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Measure Action Impact",
+        "description": "14. Measure pre vs post intervention sentiment for aspects targeted by action.",
+        "operationId": "measure_action_impact_api_v1_actions__action_id__impact_get",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "window_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Window Days"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "name": "min_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Min N"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Measure Action Impact Api V1 Actions  Action Id  Impact Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/export": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Export Report",
+        "description": "15. Export executive multi-tab Excel workbook (.xlsx) or printable HTML report.",
+        "operationId": "export_report_api_v1_reports_export_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "'xlsx' or 'html'",
+              "default": "xlsx",
+              "title": "Format"
+            },
+            "description": "'xlsx' or 'html'"
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -647,12 +1263,17 @@
           "analyzer_method": {
             "type": "string",
             "title": "Analyzer Method",
-            "default": "b1_rule"
+            "default": "a1_gemini_v2"
           },
           "min_n": {
             "type": "integer",
             "title": "Min N",
             "default": 5
+          },
+          "async_mode": {
+            "type": "boolean",
+            "title": "Async Mode",
+            "default": false
           }
         },
         "type": "object",
@@ -715,6 +1336,17 @@
             ],
             "title": "Overall Sentiment"
           },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
           "opinions": {
             "items": {
               "additionalProperties": true,
@@ -738,6 +1370,11 @@
             "type": "string",
             "title": "Scenario Tag",
             "default": "real_shop"
+          },
+          "analyzer_method": {
+            "type": "string",
+            "title": "Analyzer Method",
+            "default": "a1_gemini_v2"
           },
           "reviews": {
             "items": {
