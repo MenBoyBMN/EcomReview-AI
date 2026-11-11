@@ -58,3 +58,4 @@ Module `src/ecomreview/agent/critic.py` đóng vai trò chốt chặn an toàn b
 **Kiểm thử tiêm lỗi (Fault-Injection Verification):** Trong bộ kiểm thử tự động `tests/test_critic.py`, 10 đề xuất hành động bị tiêm lỗi chủ đích trải đều từ R1 đến R7 được đưa vào `HybridCritic`. Kết quả thực nghiệm đạt **tỷ lệ phát hiện 10/10 (100% Recall)** và **100% phục hồi thành công** sau khi qua bước `auto_repair`.
 
 <!-- CreBy: MenBoyBMN -->
+

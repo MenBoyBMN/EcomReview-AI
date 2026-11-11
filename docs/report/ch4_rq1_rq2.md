@@ -62,3 +62,4 @@ Khi chuyển sang bài toán thực tế của các SMEs thương mại điện 
 3. **Hiện tượng "Dịch quá mức" (Over-normalization Artifact) đối với trích xuất bằng chứng của LLM:** Khi bật thay thế từ điển cứng (`norm=ON`), một số cụm từ viết tắt hoặc từ ghép (như *"chất liệu"* khi gặp chữ *"chất"* được mở rộng thành *"chất lượng liệu"*) làm biến dạng bề mặt chuỗi, khiến câu trích dẫn (`evidence`) của LLM lệch khỏi văn bản gốc (`Delta_F1 = -0.0114`). Phát hiện này dẫn tới khuyến nghị kiến trúc quan trọng cho hệ thống sản phẩm: **Sử dụng `norm=ON` cho các bộ phân loại nhẹ (`B2`, `B3`) và tìm kiếm từ khóa, nhưng truyền song song văn bản gốc `raw_text` cho `A1-v2` để bảo toàn 100% độ trung thực của bằng chứng trích dẫn (`Quote Fidelity`).**
 
 <!-- CreBy: MenBoyBMN -->
+

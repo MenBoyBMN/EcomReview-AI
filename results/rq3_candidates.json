@@ -36,7 +36,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -240,7 +240,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -419,7 +419,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -598,7 +598,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -777,7 +777,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -956,7 +956,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -1135,7 +1135,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -1314,7 +1314,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -1489,7 +1489,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {
@@ -1693,7 +1693,7 @@
         {
           "rule_id": "R5",
           "action_id": "p0_act_002",
-          "message": "Vi phạm R5 (Marketing Flag Sync): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
+          "message": "Vi phạm R5 (Marketing Flag): action_type=PRODUCT_FIX nhưng is_marketing=True (kỳ vọng False).",
           "auto_fixable": true
         },
         {

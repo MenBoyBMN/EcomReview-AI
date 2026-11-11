@@ -1,0 +1,799 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EcomReview AI API",
+    "description": "Vietnamese Aspect-Based Sentiment Analysis & Evidence-Grounded Marketing Action Planning API for Raincoat E-Commerce SMEs.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "1. Check API and database health status.",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Check Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/upload": {
+      "post": {
+        "tags": [
+          "Ingestion"
+        ],
+        "summary": "Upload Reviews",
+        "description": "2. Upload and sanitize a batch of customer reviews.",
+        "operationId": "upload_reviews_api_v1_reviews_upload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Upload Reviews Api V1 Reviews Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analyze/run": {
+      "post": {
+        "tags": [
+          "Analysis"
+        ],
+        "summary": "Run Analysis",
+        "description": "3. Run ABSA analysis and InsightEngine on a scenario.",
+        "operationId": "run_analysis_api_v1_analyze_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Run Analysis Api V1 Analyze Run Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get Job Status",
+        "description": "4. Query audit status of a background or synchronous job.",
+        "operationId": "get_job_status_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Job Status Api V1 Jobs  Job Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/overview": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get Overview Stats",
+        "description": "5. Return executive KPIs, Wilson 95% CI aspect stats, and platform breakdown.",
+        "operationId": "get_overview_stats_api_v1_stats_overview_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "min_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Min N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Overview Stats Api V1 Stats Overview Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/insights": {
+      "get": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "List Insights",
+        "description": "6. Retrieve numerically verified Insights for a scenario.",
+        "operationId": "list_insights_api_v1_insights_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Insights Api V1 Insights Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/generate": {
+      "post": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Generate Actions",
+        "description": "7. Execute the P1 State-Graph (Planner <-> HybridCritic) to generate grounded actions.",
+        "operationId": "generate_actions_api_v1_actions_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Generate Actions Api V1 Actions Generate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "List Actions",
+        "description": "8. Retrieve persisted ActionProposals and their HybridCritic traces.",
+        "operationId": "list_actions_api_v1_actions_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "is_marketing",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Marketing"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Actions Api V1 Actions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/{action_id}/decision": {
+      "post": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Submit Action Decision",
+        "description": "9. Record Human Approval Gate decision (APPROVED, EDITED, REJECTED) + edit distance.",
+        "operationId": "submit_action_decision_api_v1_actions__action_id__decision_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Submit Action Decision Api V1 Actions  Action Id  Decision Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews": {
+      "get": {
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Query Reviews",
+        "description": "10. Query customer reviews and their extracted ABSA opinions.",
+        "operationId": "query_reviews_api_v1_reviews_get",
+        "parameters": [
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "real_shop",
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "aspect",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aspect"
+            }
+          },
+          {
+            "name": "polarity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Polarity"
+            }
+          },
+          {
+            "name": "review_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated review IDs for evidence drill-down",
+              "title": "Review Ids"
+            },
+            "description": "Comma-separated review IDs for evidence drill-down"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Query Reviews Api V1 Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionDecisionRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision",
+            "description": "APPROVED, EDITED, or REJECTED"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          },
+          "edited_content": {
+            "type": "string",
+            "title": "Edited Content",
+            "default": ""
+          },
+          "reason_category": {
+            "type": "string",
+            "title": "Reason Category",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "ActionDecisionRequest",
+        "description": "Human-in-the-loop approval/edit/rejection payload."
+      },
+      "ActionGenerateRequest": {
+        "properties": {
+          "scenario_tag": {
+            "type": "string",
+            "title": "Scenario Tag",
+            "default": "real_shop"
+          },
+          "min_n": {
+            "type": "integer",
+            "title": "Min N",
+            "default": 5
+          },
+          "max_actions": {
+            "type": "integer",
+            "title": "Max Actions",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "title": "ActionGenerateRequest",
+        "description": "Request payload to trigger the State-Graph ActionPlanner + HybridCritic."
+      },
+      "AnalyzeRunRequest": {
+        "properties": {
+          "scenario_tag": {
+            "type": "string",
+            "title": "Scenario Tag",
+            "default": "real_shop"
+          },
+          "analyzer_method": {
+            "type": "string",
+            "title": "Analyzer Method",
+            "default": "b1_rule"
+          },
+          "min_n": {
+            "type": "integer",
+            "title": "Min N",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "title": "AnalyzeRunRequest",
+        "description": "Request payload to trigger ABSA + InsightEngine on a scenario."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ReviewUploadItem": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "tiktok"
+          },
+          "shop": {
+            "type": "string",
+            "title": "Shop",
+            "default": "shop_a"
+          },
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "default": "ao_mua_da_ca"
+          },
+          "rating": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating",
+            "default": 5
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "overall_sentiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall Sentiment"
+          },
+          "opinions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Opinions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "text"
+        ],
+        "title": "ReviewUploadItem",
+        "description": "Single review record for batch ingestion."
+      },
+      "ReviewUploadRequest": {
+        "properties": {
+          "scenario_tag": {
+            "type": "string",
+            "title": "Scenario Tag",
+            "default": "real_shop"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewUploadItem"
+            },
+            "type": "array",
+            "title": "Reviews"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reviews"
+        ],
+        "title": "ReviewUploadRequest",
+        "description": "Batch review upload request payload."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

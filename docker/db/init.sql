@@ -90,3 +90,4 @@ CREATE INDEX IF NOT EXISTS idx_opinions_aspect_pol ON opinions(aspect, polarity)
 CREATE INDEX IF NOT EXISTS idx_actions_scenario_status ON actions(scenario_tag, status);
 
 -- CreBy: MenBoyBMN
+

@@ -64,3 +64,4 @@ Module `src/ecomreview/agent/insight_engine.py` kết hợp kết quả từ `to
 **Chốt chặn xác thực số liệu (`verify_numbers_in_statement`):** Mọi câu phát biểu nhận định (`statement`) trước khi lưu vào bảng `insights` đều phải đi qua hàm kiểm tra biểu thức chính quy đối chiếu 100% các con số xuất hiện trong câu văn với tập số liệu gốc từ SQL (`total_mentions`, `neg_count`, `neg_rate_pct`, `ci_low_pct`, `ci_high_pct`). Nếu phát hiện bất kỳ con số nào lệch quá $\pm 0.15$ so với nguồn SQL, hệ thống lập tức bác bỏ và回退 (fallback) về mẫu câu xác định (`format_deterministic_insight`), đảm bảo tỷ lệ ảo giác số liệu bằng **0.0% tuyệt đối**.
 
 <!-- CreBy: MenBoyBMN -->
+
