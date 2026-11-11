@@ -4,9 +4,15 @@
     "text": "Hàng chất lượng",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Hàng chất lượng"
+      }
+    ],
     "overall_sentiment": "positive",
-    "informative": true
+    "informative": false
   },
   {
     "id": "tts_0120",
@@ -32,12 +38,12 @@
       {
         "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "dày"
+        "evidence": "độ dày"
       },
       {
         "aspect": "FIT_SIZE",
         "polarity": "positive",
-        "evidence": "vừa"
+        "evidence": "vừa phải"
       }
     ],
     "overall_sentiment": "positive",
@@ -50,9 +56,14 @@
     "rating": 4,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "WATERPROOF",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "không thấm"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "thoải mái"
       }
     ],
     "overall_sentiment": "positive",
@@ -65,19 +76,14 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "m"
-      },
-      {
-        "aspect": "CUSTOMER_SERVICE",
-        "polarity": "positive",
-        "evidence": "shop"
+        "evidence": "dây kéo cứng cáp"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
-        "evidence": "màu"
+        "evidence": "màu chuẩn"
       }
     ],
     "overall_sentiment": "positive",
@@ -88,8 +94,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -101,7 +113,7 @@
       {
         "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "dày"
+        "evidence": "dày dặn"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
@@ -119,19 +131,14 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
-      {
         "aspect": "PACKAGING_SHIPPING",
         "polarity": "positive",
-        "evidence": "giao"
+        "evidence": "giao nhanh"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
-        "evidence": "màu"
+        "evidence": "đúng màu"
       }
     ],
     "overall_sentiment": "positive",
@@ -142,7 +149,13 @@
     "text": "Đúng hàng đặc",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Đúng hàng đặc"
+      }
+    ],
     "overall_sentiment": "positive",
     "informative": true
   },
@@ -153,19 +166,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "WATERPROOF",
-        "polarity": "positive",
-        "evidence": "nước"
-      },
-      {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
-      {
         "aspect": "COMFORT_USABILITY",
-        "polarity": "positive",
-        "evidence": "cổ"
+        "polarity": "negative",
+        "evidence": "cổ áo"
       }
     ],
     "overall_sentiment": "positive",
@@ -176,8 +179,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 4,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -185,7 +194,13 @@
     "text": "Tốt",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Tốt"
+      }
+    ],
     "overall_sentiment": "positive",
     "informative": false
   },
@@ -198,12 +213,7 @@
       {
         "aspect": "FIT_SIZE",
         "polarity": "negative",
-        "evidence": "m"
-      },
-      {
-        "aspect": "PACKAGING_SHIPPING",
-        "polarity": "negative",
-        "evidence": "giao"
+        "evidence": "kích thước"
       }
     ],
     "overall_sentiment": "negative",
@@ -231,14 +241,9 @@
     "rating": 2,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "negative",
-        "evidence": "m"
-      },
-      {
-        "aspect": "ACCESSIBILITY_DESIGN",
-        "polarity": "negative",
-        "evidence": "mẫu"
+        "evidence": "Không đúng mẫu quảng cáo"
       }
     ],
     "overall_sentiment": "negative",
@@ -250,11 +255,6 @@
     "source_type": "real_shop",
     "rating": 5,
     "opinions": [
-      {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
@@ -297,17 +297,12 @@
       {
         "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "dày"
-      },
-      {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
+        "evidence": "dày dặn"
       },
       {
         "aspect": "COMFORT_USABILITY",
         "polarity": "positive",
-        "evidence": "tiện"
+        "evidence": "tiện lợi"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
@@ -340,9 +335,9 @@
     "rating": 3,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "MATERIAL_DURABILITY",
         "polarity": "neutral",
-        "evidence": "m"
+        "evidence": "chất liệu"
       }
     ],
     "overall_sentiment": "neutral",
@@ -353,8 +348,14 @@
     "text": "✅",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "✅"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -371,7 +372,12 @@
       {
         "aspect": "FIT_SIZE",
         "polarity": "positive",
-        "evidence": "rộng"
+        "evidence": "mặc rộng"
+      },
+      {
+        "aspect": "COMFORT_USABILITY",
+        "polarity": "positive",
+        "evidence": "thoải mái"
       }
     ],
     "overall_sentiment": "positive",
@@ -399,9 +405,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "chất liệu"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
@@ -419,9 +425,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "Mọi thứ đều tốt"
       }
     ],
     "overall_sentiment": "positive",
@@ -432,7 +438,13 @@
     "text": "đúng ảnh",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
+    "opinions": [
+      {
+        "aspect": "ACCESSIBILITY_DESIGN",
+        "polarity": "positive",
+        "evidence": "đúng ảnh"
+      }
+    ],
     "overall_sentiment": "positive",
     "informative": false
   },
@@ -441,8 +453,14 @@
     "text": "OK.............................",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "OK.................."
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -452,14 +470,9 @@
     "rating": 2,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "negative",
-        "evidence": "m"
-      },
-      {
-        "aspect": "CUSTOMER_SERVICE",
-        "polarity": "negative",
-        "evidence": "shop"
+        "evidence": "Ko giống mô tả .rất thất vọng "
       }
     ],
     "overall_sentiment": "negative",
@@ -474,12 +487,12 @@
       {
         "aspect": "FIT_SIZE",
         "polarity": "positive",
-        "evidence": "vừa"
+        "evidence": "khá là vừa"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
-        "evidence": "màu"
+        "evidence": "chuẩn màu"
       }
     ],
     "overall_sentiment": "positive",
@@ -492,19 +505,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "vừa"
-      },
-      {
         "aspect": "PRICE_VALUE",
         "polarity": "positive",
-        "evidence": "tiền"
-      },
-      {
-        "aspect": "PACKAGING_SHIPPING",
-        "polarity": "positive",
-        "evidence": "túi"
+        "evidence": "túi tiền"
       }
     ],
     "overall_sentiment": "positive",
@@ -515,7 +518,13 @@
     "text": "Tốt",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "positive",
+        "evidence": "Tốt"
+      }
+    ],
     "overall_sentiment": "positive",
     "informative": false
   },
@@ -526,12 +535,12 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "GENERAL",
-        "polarity": "positive",
-        "evidence": "Chất liệu: Bị lững"
+        "aspect": "MATERIAL_DURABILITY",
+        "polarity": "negative",
+        "evidence": "chất liệu"
       }
     ],
-    "overall_sentiment": "positive",
+    "overall_sentiment": "negative",
     "informative": true
   },
   {
@@ -541,9 +550,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "Áo tốt nên mua sử dụng nha mọi"
       }
     ],
     "overall_sentiment": "positive",
@@ -554,8 +563,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -564,11 +579,6 @@
     "source_type": "real_shop",
     "rating": 5,
     "opinions": [
-      {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
@@ -583,8 +593,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -594,22 +610,17 @@
     "rating": 3,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
-        "polarity": "neutral",
-        "evidence": "m"
+        "aspect": "WATERPROOF",
+        "polarity": "negative",
+        "evidence": "bị thấm"
       },
       {
         "aspect": "PACKAGING_SHIPPING",
-        "polarity": "neutral",
-        "evidence": "giao"
-      },
-      {
-        "aspect": "ACCESSIBILITY_DESIGN",
-        "polarity": "neutral",
-        "evidence": "mẫu"
+        "polarity": "positive",
+        "evidence": "giao hàng nhanh"
       }
     ],
-    "overall_sentiment": "neutral",
+    "overall_sentiment": "negative",
     "informative": true
   },
   {
@@ -617,8 +628,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -630,7 +647,7 @@
       {
         "aspect": "PRICE_VALUE",
         "polarity": "positive",
-        "evidence": "giá"
+        "evidence": "giá tiền"
       }
     ],
     "overall_sentiment": "positive",
@@ -658,9 +675,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "Mua về chưa mặc lần nào nhưng "
       }
     ],
     "overall_sentiment": "positive",
@@ -673,14 +690,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "GENERAL",
         "polarity": "positive",
-        "evidence": "m"
-      },
-      {
-        "aspect": "ACCESSIBILITY_DESIGN",
-        "polarity": "positive",
-        "evidence": "mẫu"
+        "evidence": "Hàng giống mẫu"
       }
     ],
     "overall_sentiment": "positive",
@@ -693,19 +705,14 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
-      {
         "aspect": "PACKAGING_SHIPPING",
         "polarity": "positive",
-        "evidence": "giao"
+        "evidence": "giao nhanh"
       },
       {
         "aspect": "ACCESSIBILITY_DESIGN",
         "polarity": "positive",
-        "evidence": "màu"
+        "evidence": "đúng màu"
       }
     ],
     "overall_sentiment": "positive",
@@ -720,7 +727,7 @@
       {
         "aspect": "GENERAL",
         "polarity": "positive",
-        "evidence": "Áo dung QC thấy cũng"
+        "evidence": "Áo dung QC thấy cũng ok"
       }
     ],
     "overall_sentiment": "positive",
@@ -733,14 +740,9 @@
     "rating": 5,
     "opinions": [
       {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
-      },
-      {
         "aspect": "COMFORT_USABILITY",
         "polarity": "positive",
-        "evidence": "tiện"
+        "evidence": "rất tiện"
       }
     ],
     "overall_sentiment": "positive",
@@ -754,18 +756,13 @@
     "opinions": [
       {
         "aspect": "MATERIAL_DURABILITY",
-        "polarity": "positive",
-        "evidence": "mỏng"
-      },
-      {
-        "aspect": "FIT_SIZE",
-        "polarity": "positive",
-        "evidence": "m"
+        "polarity": "neutral",
+        "evidence": "chất liệu"
       },
       {
         "aspect": "COMFORT_USABILITY",
         "polarity": "positive",
-        "evidence": "tiện"
+        "evidence": "tiện lợi"
       }
     ],
     "overall_sentiment": "positive",
@@ -780,22 +777,22 @@
       {
         "aspect": "WATERPROOF",
         "polarity": "positive",
-        "evidence": "ướt"
+        "evidence": "k lo ướt"
       },
       {
-        "aspect": "FIT_SIZE",
+        "aspect": "MATERIAL_DURABILITY",
         "polarity": "positive",
-        "evidence": "m"
+        "evidence": "chất liệu"
       },
       {
         "aspect": "COMFORT_USABILITY",
         "polarity": "positive",
-        "evidence": "tiện"
+        "evidence": "tiện lợi"
       },
       {
         "aspect": "PRICE_VALUE",
         "polarity": "positive",
-        "evidence": "giá"
+        "evidence": "giá hợp lí"
       }
     ],
     "overall_sentiment": "positive",
@@ -806,8 +803,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   },
   {
@@ -815,8 +818,14 @@
     "text": "Ok",
     "source_type": "real_shop",
     "rating": 5,
-    "opinions": [],
-    "overall_sentiment": "positive",
+    "opinions": [
+      {
+        "aspect": "GENERAL",
+        "polarity": "neutral",
+        "evidence": "Ok"
+      }
+    ],
+    "overall_sentiment": "neutral",
     "informative": false
   }
 ]

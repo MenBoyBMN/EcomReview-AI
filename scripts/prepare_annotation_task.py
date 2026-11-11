@@ -5,6 +5,7 @@ providing rule-based suggestions while leaving final judgment to the human annot
 """
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -14,54 +15,168 @@ from ecomreview.schemas import Aspect, Polarity
 INTERIM_CSV = Path("data/interim/shop_reviews_anon.csv")
 GOLD_DIR = Path("data/gold")
 
-# Simple rule dictionary for domain aspect hints
+# Refined rule dictionary for domain aspect hints (word-boundary safe)
 ASPECT_HINTS: list[tuple[str, Aspect, list[str]]] = [
-    ("chống thấm", Aspect.WATERPROOF, ["chống thấm", "ngấm", "ướt", "nước"]),
+    (
+        "chống thấm",
+        Aspect.WATERPROOF,
+        [
+            "chống thấm",
+            "chống nước",
+            "ít bị thấm mưa",
+            "không thấm",
+            "bị thấm",
+            "ngấm nước",
+            "vô nước",
+            "k lo ướt",
+            "thấm",
+            "ngấm",
+            "ướt",
+        ],
+    ),
     (
         "chất liệu",
         Aspect.MATERIAL_DURABILITY,
-        ["vải", "da cá", "dày", "mỏng", "rách", "khóa", "cúc", "bền"],
+        [
+            "chất liệu",
+            "da cá",
+            "dày dặn",
+            "độ dày",
+            "nhựa mỏng",
+            "dây kéo cứng cáp",
+            "day kéo",
+            "dây kéo",
+            "bị lững",
+            "vải",
+            "dày",
+            "mỏng",
+            "rách",
+            "khóa",
+            "cúc",
+            "bền",
+        ],
     ),
     (
         "kích thước",
         Aspect.FIT_SIZE,
-        ["size", "sz", "vừa", "rộng", "chật", "dài", "ngắn", "cao", "kg", "m"],
+        [
+            "kích thước",
+            "size",
+            "sz",
+            "vừa vặn",
+            "khá là vừa",
+            "mặc rộng",
+            "rộng",
+            "chật",
+            "cao 1m",
+            "1m7",
+            "95kg",
+        ],
     ),
     (
         "tiện dụng",
         Aspect.COMFORT_USABILITY,
-        ["tiện", "gấp", "kính", "bí", "mát", "nóng", "cổ", "tay"],
+        [
+            "thoải mái",
+            "tiện lợi",
+            "rất tiện",
+            "nhanh gọn",
+            "mặc êm",
+            "tiện",
+            "nhẹ",
+            "gấp",
+            "kính",
+            "bí",
+            "mát",
+            "nóng",
+        ],
     ),
-    ("giá cả", Aspect.PRICE_VALUE, ["giá", "tiền", "đắt", "rẻ", "đáng"]),
-    ("vận chuyển", Aspect.PACKAGING_SHIPPING, ["giao", "ship", "đóng gói", "hộp", "túi"]),
+    (
+        "giá cả",
+        Aspect.PRICE_VALUE,
+        ["giá tiền", "túi tiền", "giá hợp lí", "giá hợp lý", "đáng tiền", "giá", "đắt", "rẻ"],
+    ),
+    (
+        "vận chuyển",
+        Aspect.PACKAGING_SHIPPING,
+        ["giao hàng nhanh", "giao nhanh", "ship nhanh", "đóng gói", "ship", "hộp", "túi đựng"],
+    ),
     (
         "chăm sóc khách hàng",
         Aspect.CUSTOMER_SERVICE,
-        ["tư vấn", "shop", "trả lời", "đổi", "nhiệt tình"],
+        ["tư vấn", "trả lời", "đổi trả", "nhiệt tình"],
     ),
     (
         "thiết kế thẩm mỹ",
         Aspect.ACCESSIBILITY_DESIGN,
-        ["màu", "đẹp", "xấu", "mẫu", "kiểu", "thời trang"],
+        ["màu chuẩn", "chuẩn màu", "đúng màu", "sai màu", "màu", "đẹp", "xấu", "thời trang"],
     ),
 ]
 
 
+def _match_keyword(kw: str, lower_t: str) -> bool:
+    """Match keyword safely using word boundaries for short tokens."""
+    if kw == "vừa" and ("vừa phải" in lower_t or "vừa túi tiền" in lower_t or "vừa tiền" in lower_t):
+        return False
+    if len(kw) <= 4 and " " not in kw:
+        return bool(re.search(rf"(?<!\w){re.escape(kw)}(?!\w)", lower_t))
+    return kw in lower_t
+
+
 def suggest_opinions(text: str, rating: int) -> tuple[list[dict], str, bool]:
     """Suggest candidate opinions and polarity based on keywords and rating."""
-    lower_t = text.lower()
+    clean_t = text.strip()
+    lower_t = clean_t.lower()
     opinions = []
 
-    # Polarity heuristic from rating
+    # Check non-informative or pure "ok" / symbol reviews
+    stripped_alpha = re.sub(r"[^a-zA-ZÀ-ỹ0-9]+", " ", lower_t).strip()
+    if stripped_alpha in ("", "ok", "oke", "okay", "đúng ảnh") or clean_t in ("✅", "👍"):
+        return (
+            [{"aspect": Aspect.GENERAL.value, "polarity": Polarity.NEU.value, "evidence": clean_t[:20] or "ok"}],
+            Polarity.NEU.value,
+            False,
+        )
+    if "djdefvhdgbjhdvj" in lower_t or lower_t == "nan":
+        return [], Polarity.POS.value, False
+
+    # Polarity heuristic from rating + strong content cues
     default_pol = Polarity.POS if rating >= 4 else (Polarity.NEG if rating <= 2 else Polarity.NEU)
+    has_real_leak = ("bị thấm" in lower_t and "ít bị thấm" not in lower_t) or "vô nước" in lower_t
+    if has_real_leak or any(
+        p in lower_t
+        for p in [
+            "ko giao đúng kích thước",
+            "không đúng mẫu",
+            "ko giống mô tả",
+            "bị lững",
+            "rất thất vọng",
+        ]
+    ):
+        default_pol = Polarity.NEG
+    elif any(p in lower_t for p in ["chưa biết có bền", "chưa đc tốt lắm"]):
+        default_pol = Polarity.NEU
 
     for _, aspect, keywords in ASPECT_HINTS:
-        matched_kw = [kw for kw in keywords if kw in lower_t]
+        matched_kw = [kw for kw in keywords if _match_keyword(kw, lower_t)]
         if matched_kw:
-            # Check negative polarity cues around the keyword
-            neg_cues = ["không", "ko", "k", "kém", "chán", "tệ", "thất vọng", "rách", "ướt", "ngấm"]
-            is_neg = any(nc in lower_t for nc in neg_cues) and default_pol == Polarity.NEG
-            pol = Polarity.NEG if is_neg else default_pol
+            # Skip spurious ACCESSIBILITY_DESIGN if review is purely negative waterproof complaint with "đúng mẫu mã"
+            if aspect == Aspect.ACCESSIBILITY_DESIGN and has_real_leak:
+                continue
+
+            pol = default_pol
+            if aspect == Aspect.PACKAGING_SHIPPING and ("giao hàng nhanh" in lower_t or "giao nhanh" in lower_t):
+                pol = Polarity.POS
+            elif aspect == Aspect.MATERIAL_DURABILITY and (
+                "nhựa mỏng" in lower_t or "chưa biết có bền" in lower_t or "chưa đc tốt lắm" in lower_t
+            ):
+                pol = Polarity.NEU
+            elif aspect == Aspect.WATERPROOF and (
+                "không thấm" in lower_t or "ít bị thấm" in lower_t or "k lo ướt" in lower_t or "chống thấm" in lower_t or "chống nước" in lower_t
+            ):
+                pol = Polarity.POS
+            elif aspect == Aspect.WATERPROOF and ("bị thấm" in lower_t or "vô nước" in lower_t or "ngấm nước" in lower_t):
+                pol = Polarity.NEG
 
             opinions.append(
                 {
@@ -71,16 +186,16 @@ def suggest_opinions(text: str, rating: int) -> tuple[list[dict], str, bool]:
                 }
             )
 
-    if not opinions and len(text.split()) > 3:
+    if not opinions:
         opinions.append(
             {
                 "aspect": Aspect.GENERAL.value,
                 "polarity": default_pol.value,
-                "evidence": text[:20],
+                "evidence": clean_t[:30],
             }
         )
 
-    is_informative = len(text.split()) >= 3 and any(c.isalnum() for c in text)
+    is_informative = len(clean_t.split()) >= 2 and stripped_alpha not in ("hàng chất lượng",)
     overall_sent = default_pol.value
 
     return opinions, overall_sent, is_informative

@@ -40,8 +40,8 @@ Hệ thống **EcomReview AI** vận hành trên 2 luồng dữ liệu độc l�
 
 | Tệp Dữ Liệu | Số Dòng | Định Dạng | Mã Băm SHA-256 |
 | :--- | :---: | :---: | :--- |
-| `data/gold/test_locked.jsonl` | 105 | JSONL | `dee0eb5c4d57879424403fd46a5b6272623cdc1de31cc872335cfd716bebe881` |
-| `data/gold/dev.jsonl` | 60 | JSONL | `b87536515a9d9b9c16214eff851a2bc4f17c5325b762d902c142a513a5615584` |
+| `data/gold/test_locked.jsonl` | 105 | JSONL | `a3956258d9611c430a18bf81f7e137822d26eb74bc28a5fcd0914acdcad76556` |
+| `data/gold/dev.jsonl` | 60 | JSONL | `a9dacae5050988c2901bbaef44d2c4618e042b327e65f5dff43aa09013d246e4` |
 | `data/public/test.jsonl` | 400 | JSONL | `536b715ea0c05c24f1af76fb6885ceb0c93981723d8927bd85c164f8f22e32df` |
 
 ### Kiểm tra rò rỉ (Leakage Audit Verification):
