@@ -116,15 +116,41 @@ def normalize_social_text(text: str | None, enable: bool = True) -> str:
     t = re.sub(r"([!?.,])\1+", r"\1", t)
 
     # 3. Replace teencode word by word while preserving boundary punctuation
+    # Context-aware guard against over-normalizing compound nouns ("chất liệu", "chất vải", etc.)
+    compound_followers = {
+        "liệu",
+        "lieu",
+        "lượng",
+        "luong",
+        "vải",
+        "vai",
+        "dù",
+        "du",
+        "nhựa",
+        "nhua",
+        "lỏng",
+        "độc",
+        "xám",
+        "với",
+        "vs",
+        "shop",
+        "sh",
+        "sop",
+    }
+    raw_words = t.split()
     tokens: list[str] = []
-    for word in t.split():
+    for idx, word in enumerate(raw_words):
         clean_w = word.strip(".,!?;:()[]\"'")
         if not clean_w:
             tokens.append(word)
             continue
         punct_prefix = word[: len(word) - len(word.lstrip(".,!?;:()[]\"'"))]
         punct_suffix = word[len(word.rstrip(".,!?;:()[]\"'")) :]
-        mapped = TEENCODE_MAP.get(clean_w, clean_w)
+        next_clean = raw_words[idx + 1].strip(".,!?;:()[]\"'") if idx + 1 < len(raw_words) else ""
+        if clean_w in {"chất", "chat"} and next_clean in compound_followers:
+            mapped = "chất" if clean_w == "chất" else clean_w
+        else:
+            mapped = TEENCODE_MAP.get(clean_w, clean_w)
         tokens.append(f"{punct_prefix}{mapped}{punct_suffix}")
     t = " ".join(tokens)
 

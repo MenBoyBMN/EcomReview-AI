@@ -1,85 +1,74 @@
-# EcomReview AI
+# 🌧️ EcomReview AI: Hệ Thống AI Agent Tự Động Phân Tích Phản Hồi Khách Hàng Tiếng Việt & Lập Kế Hoạch Hành Động Cho SMEs
 
-> Hệ thống AI Agent tự động phân tích phản hồi khách hàng tiếng Việt (ABSA) và đề xuất kế hoạch hành động marketing / tối ưu sản phẩm khả thi cho doanh nghiệp vừa và nhỏ (SMEs).
-
----
-
-## 1. Giới Thiệu
-
-EcomReview AI là đề tài kết hợp giữa nghiên cứu khoa học học thuật (chuẩn báo cáo 30–50 trang, 3 baselines so sánh với Gemini Flash, kiểm định Bootstrap CI 95%) và sản phẩm công nghệ thực tế (FastAPI, PostgreSQL 16, Streamlit Dashboard 4 trang, Docker Compose 1-click).
-
-Case study trọng tâm: Ngành hàng **Áo mưa thời trang & tiện lợi** trên các sàn TMĐT **Shopee** và **TikTok Shop**.
+**EcomReview AI** là hệ thống phân tích cảm xúc theo khía cạnh (**Aspect-Based Sentiment Analysis — ABSA**) kết hợp **Kiến trúc Tác tử Đồ thị Trạng thái Thuần Python (`Pure Python State-Graph`)** và **Bộ Phản biện Lai 7 Quy tắc (`HybridCritic` R1–R7)**, giúp các hộ kinh doanh và doanh nghiệp vừa và nhỏ (SMEs) trên **Shopee & TikTok Shop** chuyển hóa hàng trăm đánh giá khách hàng thành các đề xuất hành động Marketing / Vận hành có căn cứ thực tế và an toàn chính sách 100%.
 
 ---
 
-## 2. Ngăn Xếp Công Nghệ (Tech Stack)
+## 🌟 5 Nguyên Tắc Kiến Trúc Bất Biến (`Architectural Invariants`)
 
-- **Ngôn ngữ:** Python 3.11+
-- **AI / LLM:** Google Gemini Flash (`google-genai`), Pydantic v2 Structured Output
-- **NLP / ML Baselines:** Rule Lexicon, TF-IDF + Logistic Regression, Pretrained ViSoBERT (`uitnlp/visobert`)
-- **Cơ sở dữ liệu:** PostgreSQL 16
-- **Backend API:** FastAPI, Uvicorn
-- **Frontend UI:** Streamlit đa trang, Plotly
-- **Đóng gói & Kiểm thử:** Pytest, Ruff, Docker Compose
+1. **Zero Numeric Hallucination (Không Ảo Giác Số Học):** 100% số liệu thống kê, tỷ lệ phần trăm và khoảng tin cậy bất đối xứng **Wilson 95% CI** được tính toán bằng truy vấn SQL/Python (`tools_aggregator.py`) và hậu kiểm qua `verify_numbers_in_statement()` + Luật `R2`.
+2. **Grounded & Actionable Proposals:** Mọi đề xuất hành động (`ActionProposal`) bắt buộc gắn kèm `insight_ids` hợp lệ và tối thiểu **2 mã đánh giá thực tế (`evidence_review_ids`)** từ CSDL.
+3. **4-Layer Defense-in-Depth Security:** Ẩn danh SĐT/Email (`scrub_pii`), khử khuẩn chuỗi + bọc thẻ `<customer_review>`, ép kiểu đầu ra qua Pydantic v2 `Structured Output`, và cưỡng chế kết nối CSDL chỉ đọc (`read_only=True`) cho tiến trình phân tích.
+4. **Pure Python State-Graph & HybridCritic (`R1–R7`):** Vòng lặp `Aggregator -> InsightEngine -> ActionPlanner <-> HybridCritic (R1–R7) -> Auto-Repair -> Human Approval Gate`.
+5. **Scientific Reproducibility & Offline Cache Mode:** Cố định `seed=42`, khóa mã băm `SHA-256` cho tập kiểm thử `test_locked.jsonl`, kiểm định Bootstrap 95% CI, Cohen's Kappa ($\kappa = 0.8780$) và hỗ trợ `DEMO_CACHE_MODE=true` (chạy mượt 100% ngay cả khi không có Internet hoặc API Key).
 
 ---
 
-## 3. Cấu Trúc Thư Mục Chuẩn
+## 🚀 Hướng Dẫn Khởi Chạy Nhanh 1-Click (`Quick Start`)
 
-```text
-ecomreview/
-├── data/
-│   ├── raw/                  # Dữ liệu gốc Shopee/TikTok (không commit git)
-│   ├── public/               # Benchmark công khai (UIT-ViSFD / VLSP)
-│   ├── interim/              # Dữ liệu đã làm sạch & khử khuẩn PII
-│   ├── gold/                 # Tập dev.jsonl, test_locked.jsonl
-│   └── cache/                # Cache phản hồi Gemini theo SHA-256
-├── docs/
-│   ├── scope.md              # Phạm vi, 3 RQ, giả thuyết nghiên cứu
-│   ├── annotation_guideline.md # Hướng dẫn gán nhãn 8 khía cạnh
-│   ├── data_stats.md         # Thống kê khám phá dữ liệu (EDA)
-│   └── report/               # Bản thảo báo cáo 5 chương (30–50 trang)
-├── knowledge/                # Tri thức miền ngành hàng (Playbook)
-├── models/                   # Checkpoints mô hình B2, B3
-├── prompts/                  # Quản lý phiên bản Prompt
-├── results/                  # Kết quả RQ1, RQ2, RQ3, trace logs
-├── scripts/                  # Scripts tiền xử lý, gán nhãn, xuất báo cáo
-├── src/ecomreview/
-│   ├── schemas.py            # Pydantic data contracts
-│   ├── security.py           # Bộ lọc Prompt Injection & ẩn danh PII
-│   ├── normalize.py          # Chuẩn hóa tiếng Việt mạng xã hội (Tuần 2)
-│   ├── db/                   # Kết nối & truy vấn PostgreSQL (Tuần 5)
-│   ├── analyze/              # B1 (Rule), B2 (TF-IDF), B3 (ViSoBERT), A1 (Gemini)
-│   ├── agent/                # StateGraph, Aggregator, Planner, Critic
-│   ├── api/                  # FastAPI router & services
-│   ├── ui/                   # Streamlit Dashboard (4 trang)
-│   └── eval/                 # Bootstrap CI, Metrics, Groundedness check
-├── tests/                    # Unit tests & Integration tests
-├── docker/                   # Dockerfile cho api và ui
-├── docker-compose.yml        # Điều phối 3 services
-├── pyproject.toml            # Cấu hình pythonpath, pytest, ruff
-├── requirements.txt          # Danh sách thư viện phụ thuộc
-└── README.md
+### Cách 1: Khởi chạy bằng Docker Compose (Khuyên dùng khi Demo / Triển khai)
+```bash
+# 1. Sao chép file cấu hình môi trường (mặc định bật sẵn DEMO_CACHE_MODE=true)
+cp .env.example .env
+
+# 2. Khởi chạy đồng thời 3 dịch vụ (PostgreSQL 16 + FastAPI Backend + Streamlit UI)
+docker compose up --build -d
 ```
+- **Giao diện Streamlit Dashboard (4 trang):** `http://localhost:8501`
+- **Tài liệu tương tác FastAPI Swagger UI (10 Endpoints):** `http://localhost:8000/docs`
 
----
-
-## 4. Hướng Dẫn Cài Đặt Nhanh
-
+### Cách 2: Khởi chạy trên Môi trường Python Cục bộ (`Local Virtualenv`)
 ```powershell
-# 1. Kích hoạt môi trường ảo
-.\.venv\Scripts\Activate.ps1
-
-# 2. Cài đặt các thư viện cần thiết
+# 1. Kích hoạt môi trường ảo và cài đặt thư viện
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. Chạy toàn bộ unit test
-pytest -v
+# 2. Khởi tạo CSDL mẫu (nạp 150 đánh giá real_shop + 10 kịch bản S1..S10)
+python scripts/seed_demo.py
 
-# 4. Kiểm tra chất lượng mã nguồn
-ruff check .
-ruff format . --check
+# 3. Khởi chạy FastAPI Backend (Terminal 1) và Streamlit Dashboard (Terminal 2)
+python -m uvicorn ecomreview.api.main:app --port 8000
+python -m streamlit run src/ecomreview/ui/app.py --server.port 8501
 ```
 
-<!-- CreBy: MenBoyBMN -->
+---
 
+## 🔬 Tái Lập Kết Quả Thực Nghiệm Nghiên Cứu (`RQ1, RQ2, RQ3 & Error Analysis`)
+
+```powershell
+# 1. Tái lập kết quả RQ1 (So sánh B1, B2, B3, A1-v2) & RQ2 (Ablation chuẩn hóa 4x2)
+python -m ecomreview.eval.run_rq1_rq2
+
+# 2. Tái lập kết quả RQ3 (Đo Groundedness tự động, Chấm mù A/B Rubric C1-C5 & Adoption)
+python scripts/make_blind_eval.py
+
+# 3. Tái lập phân tích lỗi Pareto (E1-E10) và xuất 4 biểu đồ PNG 300 DPI
+python scripts/analyze_errors_and_figures.py
+
+# 4. Chạy toàn bộ bộ kiểm thử tự động & kiểm tra chất lượng code
+pytest -v
+python -m ruff check .
+python -m ruff format . --check
+```
+
+---
+
+## 📂 Tài Liệu Kỹ Thuật & Báo Cáo Nghiên Cứu
+- **Kiến trúc hệ thống & ADR:** [`docs/architecture.md`](docs/architecture.md)
+- **Đặc tả 10 RESTful API Endpoints:** [`docs/api_reference.md`](docs/api_reference.md) và [`docs/openapi.json`](docs/openapi.json)
+- **Phân tích lỗi Pareto `E1–E10`:** [`docs/error_analysis.md`](docs/error_analysis.md)
+- **Case Study thực tế Shop Áo Mưa:** [`docs/case_study_shop_aomua.md`](docs/case_study_shop_aomua.md)
+- **Báo cáo toàn văn & Slide bảo vệ:** Thư mục [`submission/`](submission/)
+
+<!-- CreBy: MenBoyBMN -->
