@@ -50,13 +50,18 @@ class A1GeminiAnalyzer:
         self.max_retries = max_retries
         self.fallback_on_quota: bool = True
         self.quota_exhausted: bool = False
-        self.model_pool: list[str] = [
-            model_id,
+        self._exhausted_models: set[str] = set()
+        self._call_counter: int = 0
+        default_pool = [
             "gemini-3.5-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-3.7-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-lite-latest",
+            model_id,
             "gemini-flash-latest",
+            "gemini-3.6-flash",
         ]
+        # Deduplicate while preserving order
+        self.model_pool: list[str] = list(dict.fromkeys(default_pool))
         self._rule_analyzer = None
 
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
@@ -73,7 +78,7 @@ class A1GeminiAnalyzer:
         if self._client is None:
             if not self.api_key:
                 raise ValueError("GEMINI_API_KEY is not configured in environment or constructor.")
-            self._client = genai.Client(api_key=self.api_key)
+            self._client = genai.Client(api_key=self.api_key, http_options={"timeout": 15000})
         return self._client
 
     def _compute_cache_key(self, text: str) -> str:
@@ -123,17 +128,13 @@ class A1GeminiAnalyzer:
             except Exception as e:
                 logger.warning("Cache read failed for key %s: %s. Fetching from API.", cache_key, e)
 
-        # Fast circuit-breaker if quota is already known to be exhausted
+        # Fast circuit-breaker only if ALL models in pool are exhausted
         if self.quota_exhausted and self.fallback_on_quota:
             from ecomreview.analyze.b1_rule import B1RuleAnalyzer
 
             if self._rule_analyzer is None:
                 self._rule_analyzer = B1RuleAnalyzer()
             fallback_res = self._rule_analyzer.analyze_review(text)
-            cache_file.write_text(
-                json.dumps(fallback_res.model_dump(mode="json"), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
             return self._post_validate_evidence(fallback_res, text, norm_text)
 
         # 2. Prepare prompt with security encapsulation
@@ -144,57 +145,77 @@ class A1GeminiAnalyzer:
             f"{wrapped_content}"
         )
 
-        # 3. Call Gemini API with model pool fallback and exponential backoff
-        delays = [0.5, 1.0, 2.0]
+        # 3. Call Gemini API with round-robin model rotation and exponential backoff
+        delays = [1.0, 2.0, 4.0]
         response_text = ""
         last_error: Exception | None = None
 
-        for model_cand in self.model_pool:
-            if self.quota_exhausted:
-                break
-            for attempt in range(min(self.max_retries, len(delays))):
-                try:
-                    response = self.client.models.generate_content(
-                        model=model_cand,
-                        contents=full_prompt,
-                        config={
-                            "response_mime_type": "application/json",
-                            "response_schema": ReviewAnalysis,
-                            "temperature": 0.0,
-                        },
-                    )
-                    if response and response.text:
-                        response_text = response.text
-                        break
-                except (errors.APIError, errors.ServerError, errors.ClientError) as e:
-                    last_error = e
-                    err_str = str(e)
-                    if "RESOURCE_EXHAUSTED" in err_str or "Quota exceeded" in err_str:
-                        logger.warning(
-                            "Daily quota exceeded on model %s. Setting circuit breaker.", model_cand
-                        )
-                        self.quota_exhausted = True
-                        break
-                    wait_time = delays[attempt]
-                    logger.warning(
-                        "Model %s error (attempt %d): %s. Backing off %.1fs...",
-                        model_cand,
-                        attempt + 1,
-                        e,
-                        wait_time,
-                    )
-                    time.sleep(wait_time)
-                except Exception as e:
-                    last_error = e
-                    time.sleep(delays[attempt])
+        active_pool = [m for m in self.model_pool if m not in self._exhausted_models]
+        if not active_pool:
+            active_pool = list(self.model_pool)
 
+        start_idx = self._call_counter % len(active_pool)
+        self._call_counter += 1
+        rotated_pool = active_pool[start_idx:] + active_pool[:start_idx]
+
+        for pass_idx in range(2):
+            for model_cand in rotated_pool:
+                for attempt in range(min(self.max_retries, len(delays))):
+                    try:
+                        response = self.client.models.generate_content(
+                            model=model_cand,
+                            contents=full_prompt,
+                            config={
+                                "response_mime_type": "application/json",
+                                "response_schema": ReviewAnalysis,
+                                "temperature": 0.0,
+                            },
+                        )
+                        if response and response.text:
+                            response_text = response.text
+                            break
+                    except (errors.APIError, errors.ServerError, errors.ClientError) as e:
+                        last_error = e
+                        err_str = str(e)
+                        if "404" in err_str or "NOT_FOUND" in err_str:
+                            self._exhausted_models.add(model_cand)
+                            break
+                        if (
+                            "RESOURCE_EXHAUSTED" in err_str
+                            or "Quota exceeded" in err_str
+                            or "429" in err_str
+                        ):
+                            logger.warning(
+                                "Rate/quota limit on model %s (pass %d). Switching model...",
+                                model_cand,
+                                pass_idx + 1,
+                            )
+                            time.sleep(1.0)
+                            break
+                        wait_time = delays[attempt]
+                        logger.warning(
+                            "Model %s error (attempt %d): %s. Backing off %.1fs...",
+                            model_cand,
+                            attempt + 1,
+                            e,
+                            wait_time,
+                        )
+                        time.sleep(wait_time)
+                    except Exception as e:
+                        last_error = e
+                        time.sleep(delays[attempt])
+
+                if response_text:
+                    break
             if response_text:
                 break
+            if pass_idx == 0:
+                time.sleep(5.0)
 
         if not response_text:
             if self.fallback_on_quota:
                 logger.warning(
-                    "All Gemini models exhausted. Using offline fallback for '%s'.",
+                    "All Gemini models in pool failed/exhausted. Using offline fallback for '%s'.",
                     text[:40],
                 )
                 from ecomreview.analyze.b1_rule import B1RuleAnalyzer
@@ -202,10 +223,6 @@ class A1GeminiAnalyzer:
                 if self._rule_analyzer is None:
                     self._rule_analyzer = B1RuleAnalyzer()
                 fallback_res = self._rule_analyzer.analyze_review(text)
-                cache_file.write_text(
-                    json.dumps(fallback_res.model_dump(mode="json"), ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
                 return self._post_validate_evidence(fallback_res, text, norm_text)
 
             raise RuntimeError(
@@ -216,14 +233,13 @@ class A1GeminiAnalyzer:
         raw_json = json.loads(response_text)
         analysis = ReviewAnalysis.model_validate(raw_json)
 
-        # 5. Persist to cache
+        # 5. Persist genuine Gemini response to cache
         cache_file.write_text(
             json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
         # 6. Post-validate evidence fidelity
-        return self._post_validate_evidence(analysis, text, norm_text)
         return self._post_validate_evidence(analysis, text, norm_text)
 
     def analyze_batch(

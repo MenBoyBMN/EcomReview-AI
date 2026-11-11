@@ -7,10 +7,12 @@ Outputs:
 
 import json
 import logging
+import tempfile
 import time
 from pathlib import Path
 
 import pandas as pd
+from sklearn.model_selection import KFold
 
 from ecomreview.analyze.a1_gemini import A1GeminiAnalyzer
 from ecomreview.analyze.b1_rule import B1RuleAnalyzer
@@ -32,8 +34,38 @@ def load_jsonl(filepath: str | Path) -> list[dict]:
     return records
 
 
+def run_b2_oof_dev(
+    public_train_path: Path, gold_dev: list[dict], seed: int = 42
+) -> tuple[list[ReviewAnalysis], float]:
+    """Evaluate B2 on dev.jsonl using 5-fold out-of-fold predictions to prevent train=test overfit."""
+    kf = KFold(n_splits=5, shuffle=True, random_state=seed)
+    oof_preds: list[ReviewAnalysis | None] = [None] * len(gold_dev)
+    latencies: list[float] = []
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_fold_path = Path(tmpdir) / "fold_train.jsonl"
+        for train_idx, val_idx in kf.split(gold_dev):
+            with open(tmp_fold_path, "w", encoding="utf-8") as f:
+                for idx in train_idx:
+                    f.write(json.dumps(gold_dev[idx], ensure_ascii=False) + "\n")
+
+            fold_b2 = B2TfidfAnalyzer(random_state=seed)
+            fold_b2.fit(public_train_path, tmp_fold_path)
+
+            for idx in val_idx:
+                start_t = time.perf_counter()
+                pred = fold_b2.analyze_review(gold_dev[idx]["text"])
+                latencies.append((time.perf_counter() - start_t) * 1000)
+                oof_preds[idx] = pred
+
+    avg_lat = sum(latencies) / len(latencies)
+    return [p for p in oof_preds if p is not None], avg_lat
+
+
 def main():
     dev_path = Path("data/gold/dev.jsonl")
+    pub_train_path = Path("data/public/train.jsonl")
+    pub_val_path = Path("data/public/val.jsonl")
     results_dir = Path("results")
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,19 +76,15 @@ def main():
     texts_dev = [item["text"] for item in gold_dev]
     logger.info("Loaded %d dev samples from %s", len(gold_dev), dev_path)
 
-    # 1. Initialize systems
+    # 1. Initialize & Fit full B2 model artifact for downstream use
     logger.info("Initializing Analyzers...")
     b1 = B1RuleAnalyzer()
 
     model_path = Path("models/b2_tfidf_pipeline.joblib")
-    if not model_path.exists():
-        logger.info("Training B2 TF-IDF pipeline...")
-        b2 = B2TfidfAnalyzer(random_state=42)
-        b2.fit("data/public/train.jsonl", "data/gold/dev.jsonl")
-        b2.save(model_path)
-    else:
-        logger.info("Loading existing B2 TF-IDF pipeline...")
-        b2 = B2TfidfAnalyzer.load(model_path)
+    logger.info("Training and saving full B2 TF-IDF pipeline to %s...", model_path)
+    b2 = B2TfidfAnalyzer(random_state=42)
+    b2.fit(pub_train_path, dev_path)
+    b2.save(model_path)
 
     a1 = A1GeminiAnalyzer(
         model_id="gemini-3.5-flash",
@@ -66,7 +94,7 @@ def main():
 
     systems = [
         ("B1: Rule & Lexicon", b1, 0.0),
-        ("B2: TF-IDF + LogReg", b2, 0.0),
+        ("B2: TF-IDF + LogReg (5-Fold CV)", b2, 0.0),
         ("A1: Gemini Flash (v1)", a1, 0.05),
     ]
 
@@ -75,19 +103,34 @@ def main():
 
     for name, analyzer, cost_1k in systems:
         logger.info("Evaluating %s on dev.jsonl...", name)
-        preds: list[ReviewAnalysis] = []
-        latencies = []
+        if name.startswith("B2"):
+            preds, avg_lat = run_b2_oof_dev(pub_train_path, gold_dev, seed=42)
+        elif name.startswith("A1"):
+            from concurrent.futures import ThreadPoolExecutor
 
-        for text in texts_dev:
-            start_t = time.perf_counter()
-            pred = analyzer.analyze_review(text)
-            latencies.append((time.perf_counter() - start_t) * 1000)
-            preds.append(pred)
+            def _eval_one(t: str) -> tuple[ReviewAnalysis, float]:
+                st = time.perf_counter()
+                p = analyzer.analyze_review(t)
+                return p, (time.perf_counter() - st) * 1000
+
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                out_pairs = list(ex.map(_eval_one, texts_dev))
+            preds = [p for p, _ in out_pairs]
+            latencies = [lat for _, lat in out_pairs]
+            avg_lat = sum(latencies) / len(latencies)
+        else:
+            preds = []
+            latencies = []
+            for text in texts_dev:
+                start_t = time.perf_counter()
+                pred = analyzer.analyze_review(text)
+                latencies.append((time.perf_counter() - start_t) * 1000)
+                preds.append(pred)
+            avg_lat = sum(latencies) / len(latencies)
 
         if name.startswith("A1"):
             a1_predictions = preds
 
-        avg_lat = sum(latencies) / len(latencies)
         m = evaluate_predictions(gold_dev, preds, texts=texts_dev, n_boot=2000, seed=42)
 
         ci_over = m["overall_sentiment_ci"]
@@ -104,6 +147,32 @@ def main():
         }
         rows.append(row)
         logger.info("%s -> ABSA Macro-F1: %s, Latency: %.1fms", name, row["ABSA_Macro_F1"], avg_lat)
+
+    # 1b. Also evaluate B1 and B2 on 200 samples of data/public/val.jsonl (Task 3.5)
+    if pub_val_path.exists():
+        pub_val_records = load_jsonl(pub_val_path)[:200]
+        pub_val_texts = [item["text"] for item in pub_val_records]
+        pub_rows = []
+        for name, is_b2 in [("B1: Rule & Lexicon", False), ("B2: TF-IDF + LogReg", True)]:
+            p_list: list[ReviewAnalysis] = []
+            lats: list[float] = []
+            for text in pub_val_texts:
+                st = time.perf_counter()
+                pred = b2.analyze_review(text, is_macro_track=True) if is_b2 else b1.analyze_review(text)
+                lats.append((time.perf_counter() - st) * 1000)
+                p_list.append(pred)
+            m_pub = evaluate_predictions(pub_val_records, p_list, texts=pub_val_texts, n_boot=1000, seed=42)
+            ci_o = m_pub["overall_sentiment_ci"]
+            pub_rows.append(
+                {
+                    "Track": "Public Benchmark (val 200)",
+                    "System": name,
+                    "Overall_F1": f"{m_pub['overall_sentiment_f1']:.4f} [{ci_o[1]:.4f} - {ci_o[2]:.4f}]",
+                    "Latency_ms": f"{sum(lats) / len(lats):.1f}",
+                }
+            )
+        pd.DataFrame(pub_rows).to_csv(results_dir / "public_val_comparison_v1.csv", index=False, encoding="utf-8-sig")
+        logger.info("Saved Public Benchmark val comparison to results/public_val_comparison_v1.csv")
 
     # 2. Save CSV comparison
     df_results = pd.DataFrame(rows)

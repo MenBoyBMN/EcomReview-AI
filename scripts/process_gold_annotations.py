@@ -15,6 +15,7 @@ import pandas as pd
 
 GOLD_DIR = Path("data/gold")
 DOCS_DIR = Path("docs")
+REAL_GOLD_V2_JSONL = GOLD_DIR / "gold_v2.jsonl"
 REAL_GOLD_JSONL = GOLD_DIR / "gold_round1.jsonl"
 SYN_DEV_JSONL = GOLD_DIR / "synthetic_dev.jsonl"
 DEV_JSONL = GOLD_DIR / "dev.jsonl"
@@ -33,14 +34,15 @@ def compute_sha256(file_path: Path) -> str:
 
 def process_and_lock_splits():
     """Split gold reviews into dev and test_locked, verify zero leakage, and compute hash."""
-    if not REAL_GOLD_JSONL.exists():
-        raise FileNotFoundError(f"Missing real gold data at {REAL_GOLD_JSONL}")
+    source_gold = REAL_GOLD_V2_JSONL if REAL_GOLD_V2_JSONL.exists() else REAL_GOLD_JSONL
+    if not source_gold.exists():
+        raise FileNotFoundError(f"Missing real gold data at {source_gold}")
     if not SYN_DEV_JSONL.exists():
         raise FileNotFoundError(f"Missing synthetic dev data at {SYN_DEV_JSONL}")
 
     # Load real reviews
     real_records = []
-    with open(REAL_GOLD_JSONL, "r", encoding="utf-8") as f:
+    with open(source_gold, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
