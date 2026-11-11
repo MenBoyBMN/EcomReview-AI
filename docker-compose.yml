@@ -39,30 +39,6 @@ services:
       db:
         condition: service_healthy
 
-  ui:
-    build:
-      context: .
-      dockerfile: docker/ui/Dockerfile
-    container_name: ecomreview_ui
-    environment:
-      DEMO_CACHE_MODE: "true"
-      ECOMREVIEW_DB_BACKEND: "postgres"
-      DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
-      DATABASE_URL_RO: "postgresql://ecom_agent_ro:agent_readonly_pass@db:5432/${POSTGRES_DB:-ecomreview}"
-      ECOMREVIEW_API_KEY: "${ECOMREVIEW_API_KEY:-}"
-      ECOMREVIEW_SQLITE_PATH: "/app/data/ecomreview.db"
-      API_BASE_URL: "http://api:8000"
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./data:/app/data
-      - ./results:/app/results
-    depends_on:
-      db:
-        condition: service_healthy
-      api:
-        condition: service_started
-
 volumes:
   pgdata:
 

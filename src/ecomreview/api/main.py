@@ -570,8 +570,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
             default=None, description="Comma-separated review IDs for evidence drill-down"
         ),
         limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any]:
-        """10. Query customer reviews and their extracted ABSA opinions."""
+        """10. Query customer reviews and their extracted ABSA opinions with pagination."""
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             if review_ids:
@@ -599,8 +600,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if platform:
                     q += " AND r.platform = ?"
                     p.append(platform)
-                q += " ORDER BY r.review_id ASC LIMIT ?"
-                p.append(limit)
+                q += " ORDER BY r.review_id ASC LIMIT ? OFFSET ?"
+                p.extend([limit, offset])
                 rows = conn.execute(q, tuple(p)).fetchall()
             else:
                 q = "SELECT * FROM reviews WHERE scenario_tag = ?"
@@ -611,8 +612,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if polarity:
                     q += " AND overall_sentiment = ?"
                     p.append(polarity)
-                q += " ORDER BY review_id ASC LIMIT ?"
-                p.append(limit)
+                q += " ORDER BY review_id ASC LIMIT ? OFFSET ?"
+                p.extend([limit, offset])
                 rows = conn.execute(q, tuple(p)).fetchall()
 
             # Batch fetch opinions to eliminate N+1 queries

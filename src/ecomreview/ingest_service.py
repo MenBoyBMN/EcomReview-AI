@@ -1,4 +1,4 @@
-"""Shared review ingestion service used by both FastAPI and Streamlit UI."""
+"""Review ingestion service for the EcomReview AI FastAPI Backend."""
 
 from __future__ import annotations
 

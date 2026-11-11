@@ -122,6 +122,11 @@ class TestEcomReviewAPI:
         assert r_revs.status_code == 200
         assert r_revs.json()["count"] == 2
 
+        # 10b. GET /api/v1/reviews with pagination (limit + offset)
+        r_page = client.get("/api/v1/reviews?scenario_tag=api_scen&limit=3&offset=2")
+        assert r_page.status_code == 200
+        assert r_page.json()["count"] == 3
+
         # 11. GET /api/v1/trends
         r_trends = client.get("/api/v1/trends?scenario_tag=api_scen&period=month&min_n=1")
         assert r_trends.status_code == 200

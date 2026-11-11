@@ -1,90 +1,96 @@
-# 🌧️ EcomReview AI: Hệ Thống AI Agent Tự Động Phân Tích Phản Hồi Khách Hàng Tiếng Việt & Lập Kế Hoạch Hành Động Cho SMEs
+# 🌧️ EcomReview AI — Backend API & AI Engine
 
-**EcomReview AI** là hệ thống phân tích cảm xúc theo khía cạnh (**Aspect-Based Sentiment Analysis — ABSA**) kết hợp **Kiến trúc Tác tử Đồ thị Trạng thái Thuần Python (`Pure Python State-Graph`)** và **Bộ Phản biện Lai 7 Quy tắc (`HybridCritic` R1–R7)**, giúp các hộ kinh doanh và doanh nghiệp vừa và nhỏ (SMEs) trên **Shopee & TikTok Shop** chuyển hóa hàng trăm đánh giá khách hàng thành các đề xuất hành động Marketing / Vận hành có căn cứ thực tế và an toàn chính sách 100%.
+**EcomReview AI** là hệ thống Backend API & AI Engine chuyên sâu về phân tích cảm xúc theo khía cạnh (**Aspect-Based Sentiment Analysis — ABSA**) và tự động hóa lập kế hoạch hành động Marketing / Vận hành cho các doanh nghiệp thương mại điện tử (Shopee, TikTok Shop).
+
+Hệ thống được thiết kế theo kiến trúc **Pure Backend Service**, sẵn sàng phục vụ bất kỳ ứng dụng Frontend hiện đại nào (Next.js, React, Vue, Mobile App) thông qua **15 RESTful API Endpoints**, tài liệu tương tác Swagger UI / OpenAPI 3.1 và cơ chế xác thực bảo mật `X-API-Key`.
 
 ---
 
 ## 🌟 5 Nguyên Tắc Kiến Trúc Bất Biến (`Architectural Invariants`)
 
-1. **Zero Numeric Hallucination (Không Ảo Giác Số Học):** 100% số liệu thống kê, tỷ lệ phần trăm và khoảng tin cậy bất đối xứng **Wilson 95% CI** được tính toán bằng truy vấn SQL/Python (`tools_aggregator.py`) và hậu kiểm qua `verify_numbers_in_statement()` + Luật `R2`.
-2. **Grounded & Actionable Proposals:** Mọi đề xuất hành động (`ActionProposal`) bắt buộc gắn kèm `insight_ids` hợp lệ và tối thiểu **2 mã đánh giá thực tế (`evidence_review_ids`)** từ CSDL.
-3. **4-Layer Defense-in-Depth Security:** Ẩn danh SĐT/Email (`scrub_pii`), khử khuẩn chuỗi + bọc thẻ `<customer_review>`, ép kiểu đầu ra qua Pydantic v2 `Structured Output`, và cưỡng chế kết nối CSDL chỉ đọc (`read_only=True`) cho tiến trình phân tích.
-4. **Pure Python State-Graph & HybridCritic (`R1–R7`):** Vòng lặp `Aggregator -> InsightEngine -> ActionPlanner <-> HybridCritic (R1–R7) -> Auto-Repair -> Human Approval Gate`.
-5. **Scientific Reproducibility & Offline Cache Mode:** Cố định `seed=42`, khóa mã băm `SHA-256` cho tập kiểm thử `test_locked.jsonl`, kiểm định Bootstrap 95% CI, Cohen's Kappa ($\kappa = 0.8780$) và hỗ trợ `DEMO_CACHE_MODE=true` (chạy mượt 100% ngay cả khi không có Internet hoặc API Key).
+1. **Zero Numeric Hallucination (Không Ảo Giác Số Học):** 100% số liệu thống kê, tỷ lệ phần trăm và khoảng tin cậy bất đối xứng **Wilson 95% CI** được tính toán xác thực qua SQL/Python (`tools_aggregator.py`) trên kết nối chỉ đọc (`READ-ONLY`) và kiểm thực chặt chẽ qua `verify_numbers_in_statement()`.
+2. **Grounded & Actionable Proposals:** Mọi đề xuất hành động (`ActionProposal`) bắt buộc gắn kèm `insight_ids` hợp lệ và tối thiểu **2 mã đánh giá thực tế (`evidence_review_ids`)** từ CSDL làm bằng chứng.
+3. **4-Layer Defense-in-Depth Security:** Ẩn danh SĐT/Email (`scrub_pii`), khử khuẩn chuỗi + bọc thẻ XML `<customer_review>`, ép kiểu đầu ra qua Pydantic v2 `Structured Output`, và khóa quyền CSDL chỉ đọc (`read_only=True`) cho các tác vụ phân tích.
+4. **Pure Python State-Graph & HybridCritic (`R1–R7`):** Vòng lặp tác tử tự trị không phụ thuộc framework cồng kềnh: `Aggregator -> InsightEngine -> ActionPlanner <-> HybridCritic (R1–R7) -> Auto-Repair -> Human Approval Gate`.
+5. **Production-Ready & Offline Cache Mode:** Hỗ trợ song song PostgreSQL 16 và SQLite, chế độ `DEMO_CACHE_MODE=true` dựa trên kho cache SHA-256 (vận hành tức thì không tốn chi phí token) và hồ bơi fallback đa mô hình.
 
 ---
 
 ## 🚀 Hướng Dẫn Khởi Chạy Nhanh 1-Click (`Quick Start`)
 
-### Cách 1: Khởi chạy bằng Docker Compose (Khuyên dùng khi Demo / Triển khai)
+### Cách 1: Khởi chạy bằng Docker Compose (Khuyên dùng khi triển khai Backend)
 ```bash
-# 1. Sao chép file cấu hình môi trường (mặc định bật sẵn DEMO_CACHE_MODE=true)
+# 1. Sao chép file cấu hình môi trường
 cp .env.example .env
 
-# 2. Khởi chạy đồng thời 3 dịch vụ (PostgreSQL 16 + FastAPI Backend + Streamlit UI)
+# 2. Khởi chạy 2 dịch vụ Backend (PostgreSQL 16 + FastAPI Backend)
 docker compose up --build -d
 ```
-- **Giao diện Streamlit Dashboard (5 trang):** `http://localhost:8501`
-- **Tài liệu tương tác FastAPI Swagger UI (15 Endpoints):** `http://localhost:8000/docs`
-- **Tích hợp PostgreSQL 16 hoặc SQLite:** Tự động chuyển đổi qua `ECOMREVIEW_DB_BACKEND=postgres|sqlite`
+- **Tài liệu Swagger UI tương tác (15 Endpoints):** `http://localhost:8000/docs`
+- **OpenAPI Schema (JSON):** `http://localhost:8000/openapi.json`
+- **Kiểm tra trạng thái sức khỏe:** `http://localhost:8000/api/v1/health`
 
-### Cách 2: Khởi chạy trên Môi trường Python Cục bộ (`Local Virtualenv`)
+### Cách 2: Khởi chạy trên Môi trường Cục bộ (`Local Python Virtualenv`)
 ```powershell
 # 1. Kích hoạt môi trường ảo và cài đặt thư viện
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Khởi tạo CSDL mẫu (nạp 150 đánh giá real_shop + 10 kịch bản S1..S10)
+# 2. Nạp dữ liệu mẫu khởi đầu
 python scripts/seed_demo.py
-python scripts/backfill_review_dates.py
 
-# 3. Khởi chạy FastAPI Backend (Terminal 1) và Streamlit Dashboard (Terminal 2)
-python -m uvicorn ecomreview.api.main:app --port 8000
-python -m streamlit run src/ecomreview/ui/app.py --server.port 8501
+# 3. Khởi chạy FastAPI Backend Server (cổng 8000)
+python -m uvicorn ecomreview.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
-## 🛡️ Xác Thực & Bảo Mật API
-FastAPI hỗ trợ xác thực header qua `X-API-Key` (mặc định chấp nhận key cấu hình tại `ECOMREVIEW_API_KEY` hoặc `demo-key-12345` khi chạy local/demo) và định danh người duyệt qua `X-Reviewer` (ví dụ `chu_shop_aomua`).
+## 🛡️ Xác Thực & Cấu Hình Bảo Mật
 
-## 📊 5 Trang Dashboard Streamlit & Tính Năng Mới
-1. **Trang 1 — Tổng quan & Cảnh báo Sớm:** Tỷ lệ hài lòng, Wilson 95% CI, banner cảnh báo sớm (`two-proportion z-test`).
-2. **Trang 2 — Phân tích Khía cạnh & Xu hướng:** Biểu đồ xu hướng Plotly theo thời gian thực và so sánh Shopee vs TikTok Shop.
-3. **Trang 3 — Đề xuất Hành động & Phê duyệt:** Duyệt `Approve / Edit / Reject`, truy vết `decided_by` và đo lường can thiệp (`Intervention Impact`).
-4. **Trang 4 — Tra cứu Đánh giá & Bằng chứng:** Lọc bằng chứng, trích dẫn khách hàng và xem vết phân tích `ReviewAnalysis`.
-5. **Trang 5 — Hỗ Trợ CSKH & Nạp Dữ Liệu:** Trợ lý phản hồi khách hàng tuân thủ 6 Guardrails (`G1–G6`), nạp file CSV/Excel kéo-thả, và xuất Báo cáo Điều hành Excel 6 sheet (`.xlsx`) & HTML in ra PDF.
+Backend hỗ trợ xác thực header qua:
+- **`X-API-Key`:** Khóa API chứng thực quyền truy cập (cấu hình tại biến môi trường `ECOMREVIEW_API_KEY`). Khi để trống, API hoạt động ở chế độ mở cho môi trường dev.
+- **`X-Reviewer`:** Định danh người duyệt (ví dụ: `chu_shop_aomua`, `lead_marketer`) để lưu vết kiểm toán (`audit log`) trong bảng `action_feedback`.
+- **`ECOMREVIEW_CORS_ORIGINS`:** Cấu hình danh sách tên miền Frontend được phép gọi API (mặc định chấp nhận `*` trong dev mode).
 
 ---
 
-## 🔬 Tái Lập Kết Quả Thực Nghiệm Nghiên Cứu (`RQ1, RQ2, RQ3 & Error Analysis`)
+## 📊 Bản Đồ 15 RESTful API Endpoints Cho Frontend Kết Nối
+
+| STT | Phương thức | Đường dẫn API | Tác dụng & Cơ chế hoạt động |
+| :---: | :---: | :--- | :--- |
+| 1 | `GET` | `/api/v1/health` | Kiểm tra trạng thái hệ thống, kết nối DB và số lượng review hiện có. |
+| 2 | `POST` | `/api/v1/reviews/upload` | Nạp lô đánh giá mới, tự động khử khuẩn PII, phân tích ABSA và lưu CSDL. |
+| 3 | `POST` | `/api/v1/analyze/run` | Kích hoạt phân tích ABSA và sinh Insight (hỗ trợ `async_mode` chạy nền). |
+| 4 | `GET` | `/api/v1/jobs/{job_id}` | Tra cứu tiến độ và kết quả của tác vụ chạy ngầm (polling cho progress bar). |
+| 5 | `GET` | `/api/v1/stats/overview` | Lấy toàn bộ KPI, tỷ lệ % 8 khía cạnh kèm khoảng tin cậy Wilson 95% CI. |
+| 6 | `GET` | `/api/v1/insights` | Lấy danh sách 5 loại Insight đã qua kiểm thực số liệu (`verify_numbers`). |
+| 7 | `POST` | `/api/v1/actions/generate` | Kích hoạt State-Graph (`Planner <-> Critic R1-R7`) để sinh đề xuất hành động. |
+| 8 | `GET` | `/api/v1/actions` | Lấy danh sách kế hoạch Marketing & Vận hành kèm điểm ưu tiên `priority_score`. |
+| 9 | `POST` | `/api/v1/actions/{id}/decision` | Người dùng duyệt (`APPROVED`, `EDITED`, `REJECTED`) kèm vết kiểm toán người duyệt. |
+| 10 | `GET` | `/api/v1/reviews` | Tra cứu danh sách đánh giá kèm phân trang (`limit`, `offset`), lọc theo khía cạnh/sàn. |
+| 11 | `GET` | `/api/v1/trends` | Lấy chuỗi dữ liệu xu hướng theo tháng (`month`) hoặc tuần (`week`) để vẽ biểu đồ. |
+| 12 | `GET` | `/api/v1/alerts` | Lấy danh sách cảnh báo sớm khi tỷ lệ phàn nàn tăng đột biến (z-test một phía). |
+| 13 | `POST` | `/api/v1/reviews/{id}/reply-draft` | Trợ lý CSKH tự động soạn câu trả lời an toàn tuân thủ 6 Guardrails G1–G6. |
+| 14 | `GET` | `/api/v1/actions/{id}/impact` | Đo lường hiệu quả trước/sau can thiệp của hành động đã duyệt (`improved`/`worsened`). |
+| 15 | `GET` | `/api/v1/reports/export` | Xuất Báo cáo Điều hành Excel 6 sheet (`.xlsx`) hoặc báo cáo HTML in ra PDF. |
+
+---
+
+## 🧪 Kiểm Thử & Kiểm Tra Chất Lượng Code
 
 ```powershell
-# 1. Tái lập kết quả RQ1 (So sánh B1, B2, B3, A1-v2) & RQ2 (Ablation chuẩn hóa 4x2)
-python -m ecomreview.eval.run_rq1_rq2
-
-# 2. Tái lập kết quả RQ3 (Đo Groundedness tự động, Chấm mù A/B Rubric C1-C5 & Adoption)
-python scripts/make_blind_eval.py
-
-# 3. Tái lập phân tích lỗi Pareto (E1-E10) và xuất 4 biểu đồ PNG 300 DPI
-python scripts/analyze_errors_and_figures.py
-
-# 4. Chạy toàn bộ bộ kiểm thử tự động & kiểm tra chất lượng code
+# Chạy bộ kiểm thử tự động toàn diện
 pytest -v
+
+# Kiểm tra định dạng và chuẩn mực mã nguồn (Ruff PEP 8)
 python -m ruff check .
 python -m ruff format . --check
 ```
 
 ---
 
-## 📂 Tài Liệu Kỹ Thuật & Báo Cáo Nghiên Cứu
-- **Kiến trúc hệ thống & ADR:** [`Abount_System/docs/architecture.md`](Abount_System/docs/architecture.md)
-- **Đặc tả 15 RESTful API Endpoints:** [`Abount_System/docs/api_reference.md`](Abount_System/docs/api_reference.md) và [`Abount_System/docs/openapi.json`](Abount_System/docs/openapi.json)
-- **Phân tích lỗi Pareto `E1–E10`:** [`Abount_System/docs/error_analysis.md`](Abount_System/docs/error_analysis.md)
-- **Case Study thực tế Shop Áo Mưa:** [`Abount_System/docs/case_study_shop_aomua.md`](Abount_System/docs/case_study_shop_aomua.md)
-- **Báo cáo toàn văn & Slide bảo vệ:** Thư mục [`Abount_System/submission/`](Abount_System/submission/)
-- **Video Demo nghiệm thu:** Thư mục [`Abount_System/demo/`](Abount_System/demo/)
-- **Đề bài & Quản lý tiến độ:** Thư mục [`Abount_System/`](Abount_System/)
+## 📂 Lưu Trữ Tài Liệu & Nghiên Cứu
+Toàn bộ các tài liệu nghiên cứu học thuật, baseline thử nghiệm (B2, B3, P0) và báo cáo khoa học được lưu trữ tại thư mục [`Abount_System/`](Abount_System/).
 
 <!-- CreBy: MenBoyBMN -->

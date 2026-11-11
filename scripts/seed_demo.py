@@ -2,7 +2,7 @@
 
 1. Seeds `real_shop` (150 real reviews) + `S1..S10` scenarios into `data/ecomreview.db`.
 2. Runs the P1 State-Graph (`EcomReviewGraphRunner`) so Insights and Actions are ready.
-3. Exports the OpenAPI 3.1 specification of the 10 RESTful endpoints to `docs/openapi.json`.
+3. Exports OpenAPI 3.1 specification (15 endpoints) to `Abount_System/docs/openapi.json`.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def seed_demo_and_export_openapi(force_reseed: bool = False) -> None:
     out_path = Path("Abount_System/docs/openapi.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(openapi_schema, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info("Exported OpenAPI specification (10 endpoints) to %s", out_path)
+    logger.info("Exported OpenAPI specification (15 endpoints) to %s", out_path)
 
 
 if __name__ == "__main__":

@@ -34,11 +34,11 @@ class A1GeminiAnalyzer:
     def __init__(
         self,
         model_id: str = "gemini-3.5-flash",
-        prompt_path: str | Path = "prompts/analyzer_v1.md",
+        prompt_path: str | Path = "prompts/analyzer_v2_frozen.md",
         cache_dir: str | Path = "data/cache",
         enable_norm: bool = True,
         api_key: str | None = None,
-        prompt_version: str = "v1",
+        prompt_version: str = "v2",
         max_retries: int = 3,
     ):
         self.model_id = model_id
