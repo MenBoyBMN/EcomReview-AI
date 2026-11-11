@@ -169,7 +169,10 @@ Tất cả các bài kiểm thử phải đạt **100% Passed** và **0 lỗi li
 ## 8. Quy Tắc Hành Vi & Ghi Chú Bản Quyền (Credit Note)
 
 - **Ngôn ngữ trao đổi:** Tiếng Việt (chính xác, trọng tâm, học thuật, tôn trọng).
-- **Mã nguồn, comment, commit:** Tiếng Anh chuyên nghiệp.
+- **Mã nguồn, comment:** Tiếng Anh chuyên nghiệp.
+- **Quy tắc đặt tên Commit Git khi Push lên GitHub:**
+  - *Nếu người dùng yêu cầu Agent tự tạo tên commit:* Bắt buộc viết bằng **tiếng Việt**, tuyệt đối **không** dùng định dạng tiền tố `abc: xyz` (không dùng `feat:`, `fix:`, `chore:`, ...), mà phải đi thẳng vào nội dung `xyz` (Ví dụ: `hoàn thiện 10 endpoint FastAPI, dashboard Streamlit 4 trang`).
+  - *Nếu người dùng tự đặt tên commit:* Lấy chính xác 100% nguyên văn tên do người dùng đặt (không tự ý thêm tiền tố, dịch hoặc sửa đổi).
 - **Credit Note bắt buộc:** Mọi file mới được tạo hoặc sửa đổi có ý nghĩa phải có chữ ký tác quyền ở dòng cuối:
   - File Python, Shell, YAML: `# CreBy: MenBoyBMN`
   - File Markdown, HTML: `<!-- CreBy: MenBoyBMN -->`

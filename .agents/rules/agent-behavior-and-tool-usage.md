@@ -7,7 +7,10 @@ Tài liệu này định hình các quy tắc ứng xử, thao tác công cụ v
 ## 1. Phong Cách Giao Tiếp & Phản Hồi
 - **Đúng trọng tâm & Ngắn gọn**: Trả lời trực diện, súc tích, không lặp lại nguyên văn các chỉ thị hoặc tóm tắt dài dòng khi không được yêu cầu.
 - **Ngôn ngữ phản hồi**: Mặc định giao tiếp với người dùng bằng **tiếng Việt**, trừ khi người dùng yêu cầu ngôn ngữ khác.
-- **Quy chuẩn mã nguồn**: Toàn bộ mã nguồn Python, tên class, hàm, biến, comment trong code, docstrings, và commit messages bắt buộc viết bằng **tiếng Anh** chuẩn quốc tế (tuân thủ PEP 8 và Google Python Style Guide).
+- **Quy chuẩn mã nguồn**: Toàn bộ mã nguồn Python, tên class, hàm, biến, comment trong code, và docstrings bắt buộc viết bằng **tiếng Anh** chuẩn quốc tế (tuân thủ PEP 8 và Google Python Style Guide).
+- **Quy tắc đặt tên commit Git khi push GitHub:**
+  - *Nếu người dùng yêu cầu Agent tự tạo tên commit:* Bắt buộc viết bằng **tiếng Việt**, **không** dùng dạng tiền tố `abc: xyz` (chỉ viết trực tiếp nội dung `xyz`, ví dụ: `hoàn thiện 10 endpoint FastAPI, dashboard Streamlit 4 trang`).
+  - *Nếu người dùng tự đặt tên:* Lấy chính xác 100% nguyên văn tên người dùng đặt (không tự ý chỉnh sửa).
 
 ---
 

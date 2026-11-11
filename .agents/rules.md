@@ -78,4 +78,15 @@ Tài liệu này là quy tắc hành vi bắt buộc dành cho Antigravity (Gemi
   - File Python, Shell, YAML: `# CreBy: MenBoyBMN`
   - File Markdown, HTML: `<!-- CreBy: MenBoyBMN -->`
 
+---
+
+## 7. Quy Tắc Đặt Tên Commit Git Khi Push GitHub
+
+- **Khi người dùng yêu cầu Agent tự tạo tên commit:**
+  - Bắt buộc viết bằng **tiếng Việt**.
+  - Tuyệt đối **không** sử dụng định dạng tiền tố `abc: xyz` (ví dụ: không dùng `feat: ...`, `fix: ...`, `chore: ...`, v.v.).
+  - Phải đi thẳng vào nội dung `xyz` (Ví dụ: `hoàn thiện 10 endpoint FastAPI, dashboard Streamlit 4 trang`).
+- **Khi người dùng tự đặt tên commit:**
+  - Lấy chính xác 100% nguyên văn tên do người dùng đặt (không tự ý thêm tiền tố, dịch hoặc sửa đổi).
+
 <!-- CreBy: MenBoyBMN -->
