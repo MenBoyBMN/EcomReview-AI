@@ -1,177 +1,191 @@
-# EcomReview AI - Sổ Tay Kỹ Thuật & Hướng Dẫn Dành Cho AI Agent
+# EcomReview AI - Sổ Tay Kỹ Thuật & Hướng Dẫn Phát Triển Sản Phẩm Production
 
-Chào mừng bạn đến với không gian làm việc của **EcomReview AI**. Tài liệu này thiết lập các tiêu chuẩn kỹ thuật, nguyên tắc kiến trúc bất biến, quy chuẩn nghiên cứu khoa học và quy tắc hành vi bắt buộc dành cho mọi AI Agent và lập trình viên trong dự án.
-
----
-
-## 1. Tổng Quan Dự Án & Triết Lý Cốt Lõi
-
-**EcomReview AI** là hệ thống AI Agent thông minh tự động phân tích phản hồi khách hàng tiếng Việt (Aspect-Based Sentiment Analysis - ABSA) và lập kế hoạch hành động marketing / tối ưu sản phẩm khả thi cho doanh nghiệp vừa và nhỏ (SMEs).
-
-- **Mục tiêu kép (Dual-Objective):** Đạt chuẩn nghiên cứu khoa học học thuật (Báo cáo 30–50 trang, 15–25 trích dẫn, 3 Baselines, kiểm định thống kê Bootstrap CI 95%, phân tích lỗi Pareto) kết hợp hoàn thiện sản phẩm công nghệ thực chiến (FastAPI, PostgreSQL 16, Streamlit Dashboard 4 trang, đóng gói Docker Compose 1-click, video demo 5–10 phút).
-- **Trường hợp điển hình (Case Study):** Sản phẩm Áo mưa thời trang & tiện lợi trên 2 sàn thương mại điện tử **Shopee** và **TikTok Shop**.
-- **Thời lượng thực hiện:** 10 tuần / 1 kỹ sư kiêm nghiên cứu viên.
+Chào mừng bạn đến với không gian làm việc của **EcomReview AI**. Tài liệu này thiết lập các tiêu chuẩn kỹ thuật, nguyên tắc kiến trúc bất biến, quy chuẩn vận hành cấp độ sản phẩm thực tế (Production-Ready) và quy tắc hành vi bắt buộc dành cho mọi AI Agent và kỹ sư phần mềm trong dự án.
 
 ---
 
-## 2. Các Nguyên Tắc Kiến Trúc Bất Biến (Architectural Invariants)
+## 1. Tầm Nhìn Sản Phẩm & Triết Lý Cốt Lõi (Production-First Philosophy)
 
-Mọi thay đổi mã nguồn hoặc đề xuất kỹ thuật bắt buộc phải tuân thủ nghiêm ngặt 5 nguyên tắc sau:
+**EcomReview AI** là nền tảng SaaS / AI Engine thực chiến chuyên phân tích phản hồi khách hàng tiếng Việt theo khía cạnh (**Aspect-Based Sentiment Analysis — ABSA**), phát hiện sớm rủi ro chất lượng hàng hóa, tự động lập kế hoạch hành động Marketing / Vận hành khả thi và hỗ trợ chăm sóc khách hàng (CSKH) tự động cho các gian hàng thương mại điện tử (**Shopee**, **TikTok Shop**).
 
-1. **Số Liệu Xác Thực Tuyệt Đối (Zero-Hallucination Metrics via SQL/Python Aggregator):**
-   - Tuyệt đối **không** để LLM tự tính toán, cộng trừ hoặc bịa số liệu thống kê từ văn bản thô.
-   - 100% các chỉ số (tổng review, tỷ lệ hài lòng, tỷ lệ tiêu cực, Wilson score confidence interval, xếp hạng vấn đề cốt lõi) phải được tính toán bằng truy vấn SQL trên PostgreSQL hoặc hàm Python thuần xác định trước khi đưa vào ngữ cảnh của Agent.
+- **Định hướng cốt lõi (Production-First):** Xây dựng một sản phẩm phần mềm hoàn chỉnh, ổn định, bảo mật, có khả năng chịu lỗi cao (fault-tolerant), sẵn sàng vận hành thực tế hàng ngày tại các doanh nghiệp vừa và nhỏ (SMEs) thay vì chỉ dừng ở mô hình thử nghiệm học thuật.
+- **Chu trình khép kín (Closed-Loop Operations):**
+  `Thu thập & Khử khuẩn PII` $\rightarrow$ `Phân tích ABSA đa tầng` $\rightarrow$ `Thống kê xác thực & Cảnh báo sớm (Z-test)` $\rightarrow$ `Lập kế hoạch & Kiểm duyệt R1–R7` $\rightarrow$ `Phê duyệt thực thi & Soạn phản hồi CSKH G1–G6` $\rightarrow$ `Đo lường hiệu quả sau can thiệp (Impact Tracking) & Xuất báo cáo điều hành`.
+- **Ngành hàng triển khai trọng tâm:** Ngành hàng Áo mưa thời trang & tiện lợi (và dễ dàng mở rộng sang các ngành hàng tiêu dùng nhanh/thời trang khác thông qua cấu hình Playbook YAML).
 
-2. **Tính Căn Cứ & Khả Thi Trong Hành Động (Grounded & Actionable Proposals):**
-   - Mọi đề xuất hành động marketing (`ActionProposal`) sinh ra bởi Agent bắt buộc phải gắn kèm bằng chứng: `insight_ids` hợp lệ và tối thiểu 2 `evidence_review_ids` thực tế từ tập dữ liệu.
+---
+
+## 2. Năm Nguyên Tắc Kiến Trúc Bất Biến (Production Architectural Invariants)
+
+Mọi thay đổi mã nguồn, bổ sung tính năng hoặc tối ưu hóa hệ thống bắt buộc phải tuân thủ nghiêm ngặt 5 nguyên tắc bất biến sau:
+
+1. **Số Liệu Xác Thực Tuyệt Đối (Zero Numeric Hallucination):**
+   - Tuyệt đối **không** để LLM tự tính toán, cộng trừ hoặc suy đoán số liệu thống kê từ văn bản thô.
+   - 100% các chỉ số KPI (tổng đánh giá, tỷ lệ phàn nàn, khoảng tin cậy bất đối xứng **Wilson 95% CI**, biến động theo tuần/tháng, kiểm định **Z-test** cảnh báo đột biến) phải được tính toán xác định qua SQL/Python (`tools_aggregator.py`) và kiểm thực chéo bằng `verify_numbers_in_statement()` trước khi xuất ra API hoặc giao diện.
+
+2. **Tính Căn Cứ, Khả Thi & Đo Lường Được (Grounded, Actionable & Measurable Proposals):**
+   - Mọi đề xuất hành động (`ActionProposal`) bắt buộc gắn kèm `insight_ids` hợp lệ và tối thiểu **2 mã đánh giá thực tế (`evidence_review_ids`)** từ CSDL làm bằng chứng.
    - Phân tách rõ ràng giữa:
      - **Hành động Marketing (`is_marketing = True`):** `LISTING_UPDATE`, `CONTENT`, `REVIEW_REPLY`, `PROMOTION`, `CUSTOMER_CARE`.
      - **Hành động Vận hành / Sản phẩm (`is_marketing = False`):** `PRODUCT_FIX`, `OPS`.
+   - Hỗ trợ luồng phê duyệt có lưu vết kiểm toán (`APPROVED`, `EDITED`, `REJECTED` kèm `X-Reviewer`) và đo lường tác động thực tế trước/sau can thiệp (`Impact Tracking`).
 
-3. **Bảo Mật & Phòng Thủ Đa Tầng Trước Prompt Injection (Defense-in-Depth Security):**
-   - Review từ khách hàng là dữ liệu ngoại vi không đáng tin cậy. Bắt buộc bảo vệ qua 4 lớp:
-     1. Khử khuẩn chuỗi (Sanitize, loại bỏ ký tự điều khiển, giới hạn độ dài).
-     2. Đóng gói trong thẻ XML cách ly `<customer_review>...</customer_review>`.
-     3. Kiểm thực chặt chẽ đầu ra qua Pydantic Schemas (`Structured Output`).
-     4. Kết nối Database ở quyền chỉ đọc (`READ-ONLY`) đối với các tiến trình chạy phân tích của Agent.
+3. **Bảo Mật Đa Tầng & An Toàn Dữ Liệu Khách Hàng (4-Layer Defense-in-Depth & API Security):**
+   - Đánh giá từ sàn TMĐT là dữ liệu ngoại vi không đáng tin cậy. Bắt buộc bảo vệ qua 4 lớp:
+     1. Tự động ẩn danh thông tin cá nhân (`scrub_pii`: SĐT, Email, đường dẫn lạ) và khử khuẩn chuỗi đầu vào (loại bỏ ký tự điều khiển, giới hạn độ dài, phát hiện mẫu Prompt Injection).
+     2. Cô lập dữ liệu khách hàng trong thẻ XML `<customer_review>...</customer_review>`.
+     3. Ép kiểu đầu ra nghiêm ngặt qua Pydantic v2 (`Structured Output`) kèm cơ chế tự phục hồi (`Self-Healing JSON Retry`).
+     4. Kết nối CSDL ở chế độ chỉ đọc (`read_only=True`) cho toàn bộ tiến trình suy luận của Agent; bảo vệ REST API bằng `X-API-Key` và cấu hình CORS chặt chẽ.
 
-4. **Kiến Trúc Tinh Gọn — State-Graph Thuần (Pure Python State-Graph):**
-   - Vòng lặp Agent: `Aggregator (SQL/CI)` $\rightarrow$ `Insight Engine` $\rightarrow$ `Action Planner` $\rightleftarrows$ `Hybrid Critic (7 Luật xác định R1–R7 + LLM-Judge)` $\rightarrow$ `Human Approval Gate`.
-   - Sử dụng Python State-Graph tự phát triển, **không** phụ thuộc vào các framework cồng kềnh (như LangChain / CrewAI) để tránh xung đột phiên bản, khó debug và gãy pipeline trong quá trình bảo vệ đồ án.
+4. **Kiến Trúc State-Graph Thuần & Kiểm Duyệt Tự Động Kép (Pure Python State-Graph & Dual Guardrails):**
+   - Sử dụng Python State-Graph thuần (`graph_runner.py`), không phụ thuộc vào các framework cồng kềnh dễ gãy khi nâng cấp phiên bản.
+   - **Kiểm duyệt Kế hoạch (`HybridCritic` R1–R7 + Auto-Repair):** Mọi kế hoạch phải vượt qua 7 luật xác định (R1–R7) trước khi đến tay người vận hành.
+   - **Kiểm duyệt Phản hồi CSKH (`ReplyAssistant` G1–G6):** Mọi bản nháp trả lời khách hàng phải tuân thủ 6 rào chắn an toàn (không cam kết quá đà, không gạ sửa sao, không điều hướng giao dịch ngoài sàn, không lộ PII, đúng độ dài và giải quyết đúng khía cạnh bị phàn nàn).
 
-5. **Tính Nghiêm Ngặt & Tái Lập Được (Scientific Rigor & Reproducibility):**
-   - Cố định Random Seed (`seed=42`) cho mọi thí nghiệm chia tách dữ liệu và khởi tạo mô hình.
-   - Đánh giá có khoảng tin cậy Bootstrap CI 95% ($B=1.000$).
-   - Kiểm định độ đồng thuận gán nhãn bằng Cohen's Kappa / Fleiss' Kappa.
-   - Thử nghiệm mù (Blind A/B Evaluation) khi so sánh Baseline Agent P0 và Proposed Agent P1.
+5. **Khả Năng Chịu Lỗi Cao & Tối Ưu Chi Phí Vận Hành (High Availability & Cost Resilience):**
+   - **Đa động cơ AI (`UnifiedLLMClient`):** Hỗ trợ chuyển đổi mượt mà giữa Cloud AI (`Gemini Flash`) và Local AI (`Ollama qwen2.5:7b`), tự động sửa lỗi JSON lệch chuẩn và tự động chuyển về bộ phân tích quy tắc xác định (`B1RuleAnalyzer`) khi mất kết nối mạng hoặc hết hạn mức API.
+   - **Cơ sở dữ liệu linh hoạt & Cache thông minh:** Hỗ trợ song song **PostgreSQL 16** (môi trường Production/Docker) và **SQLite** (triển khai cục bộ gọn nhẹ), kết hợp bộ nhớ đệm SHA-256 (`DEMO_CACHE_MODE`) giúp giảm thiểu chi phí gọi LLM cho các đánh giá trùng lặp.
 
 ---
 
 ## 3. Khung Vận Hành Tối Ưu Hóa Năng Lực Antigravity (AGY Optimization Framework)
 
-Để khai thác tối đa sức mạnh của Gemini Flash (bộ nhớ 1M-2M tokens, tốc độ siêu nhanh, Sub-agent song song, chi phí tối ưu) và loại bỏ hoàn toàn các điểm yếu mặc định (Over-engineering, Scope Creep, ngộ độc ngữ cảnh, ảo giác xác nhận), Antigravity Agent bắt buộc vận hành theo **5 Kỷ Cương Tác Chiến Phẫu Thuật**:
+Để đảm bảo chất lượng mã nguồn cấp độ Production, Antigravity Agent bắt buộc vận hành theo **5 Kỷ Cương Tác Chiến Phẫu Thuật**:
 
 1. **Kỷ Cương Phẫu Thuật Tối Thiểu (Minimal Diff & Anti-Over-Engineering):**
    - Phong cách lập trình: **Bảo thủ & Phẫu thuật (Conservative & Surgical)**.
-   - Chỉ sửa đổi chính xác số dòng code, hàm số hoặc file liên quan trực tiếp đến mục tiêu của task.
-   - Tuyệt đối **không** tự ý refactor các module xung quanh, không đổi tên biến/hàm không liên quan, không tự ý bổ sung các abstraction hoặc cấu trúc chưa được yêu cầu.
-   - Ưu tiên công cụ `edit_file` với đoạn `Target` chuẩn xác từng ký tự và thụt lề; tuyệt đối tránh ghi đè toàn bộ file lớn khi chỉ cần sửa vài dòng.
+   - Chỉ sửa đổi chính xác số dòng code, hàm số hoặc file liên quan trực tiếp đến mục tiêu công việc.
+   - Tuyệt đối **không** tự ý refactor các module xung quanh, không đổi tên biến/hàm/endpoint đang hoạt động ổn định, không thêm các lớp trừu tượng thừa thãi.
+   - Ưu tiên công cụ `edit_file` với đoạn `Target` chuẩn xác từng ký tự; tránh ghi đè toàn bộ file mã nguồn lớn khi chỉ sửa một phần nhỏ.
 
 2. **Chiến Thuật Plan Gate 2 Bước (Chống Premature Coding):**
-   - **Bước 1 (Lock):** Khi nhận task mới hoặc phân tích bug khó, trước tiên phải phân tích luồng code, xác định danh sách file bị ảnh hưởng, vạch ra các edge cases và phác thảo giải pháp Minimal Diff. **CHƯA ĐƯỢC CHỈNH SỬA MÃ NGUỒN** khi kế hoạch chưa rõ ràng hoặc chưa đạt đồng thuận.
-   - **Bước 2 (Unlock & Execute):** Sau khi kế hoạch được xác định, tiến hành thực thi chuẩn xác theo đúng phạm vi đã định, không đi chệch hướng.
+   - **Bước 1 (Lock):** Khi nhận yêu cầu tính năng mới hoặc xử lý lỗi phức tạp, trước tiên phải phân tích luồng dữ liệu, xác định các file bị ảnh hưởng (Backend/Frontend/DB), liệt kê edge cases và phác thảo giải pháp Minimal Diff. **CHƯA ĐƯỢC CHỈNH SỬA MÃ NGUỒN** khi kế hoạch chưa rõ ràng.
+   - **Bước 2 (Unlock & Execute):** Sau khi kế hoạch đã được xác định rõ, tiến hành thực thi chuẩn xác theo đúng phạm vi, đảm bảo không phá vỡ hợp đồng dữ liệu (API Contract) giữa Backend và Frontend.
 
 3. **Vệ Sinh Ngữ Cảnh & Điều Phối Sub-Agent (Context Hygiene & Subagent Delegation):**
-   - Main Agent luôn giữ ngữ cảnh sạch tinh để duy trì khả năng suy luận logic và kiến trúc ở mức cao nhất.
-   - Khi cần khảo sát diện rộng (đọc hơn 3 file lớn hoặc trace luồng dữ liệu phức tạp E2E), **bắt buộc ủy quyền (delegate) cho Sub-agent chuyên biệt** (`codebase-explorer`). Sub-agent sẽ khảo sát 20-50 file trong bộ nhớ riêng của nó rồi chỉ trả về danh sách file/hàm cụ thể cho Main Agent.
-   - Khi đọc file, luôn dùng `StartLine` và `EndLine` hoặc công cụ tìm kiếm có phạm vi, không nạp toàn bộ file hàng nghìn dòng vào context.
+   - Giữ ngữ cảnh của Main Agent luôn tinh gọn để tối ưu độ chính xác suy luận.
+   - Khi cần khảo sát diện rộng (đọc > 3 file lớn hoặc truy vết luồng dữ liệu E2E từ Database $\rightarrow$ FastAPI $\rightarrow$ React UI), **bắt buộc ủy quyền cho Sub-agent `codebase-explorer`**.
+   - Khi đọc file trực tiếp, luôn sử dụng `StartLine` và `EndLine` để chỉ nạp đúng phân đoạn mã nguồn cần thiết.
 
 4. **Cơ Chế Phản Biện Chéo Độc Lập (Adversarial Critic Gate):**
-   - Tránh thiên kiến tự xác nhận ("code mình viết ra luôn đúng").
    - Sau khi hoàn thành một cụm chức năng hoặc trước khi commit mã nguồn, triệu hồi Sub-agent `critic-reviewer` với tâm thế phản biện khắt khe độc lập:
-     - Soi chiếu toàn bộ `git diff` tìm kiếm: Null reference, rò rỉ bộ nhớ, N+1 query trong SQL, lỗi phá vỡ contract Pydantic.
-     - Kiểm định mức độ tuân thủ 7 luật xác định (R1–R7) trong tri thức miền áo mưa.
+     - Soi chiếu toàn bộ `git diff` để bắt lỗi: Null reference, rò rỉ tài nguyên DB connection, truy vấn N+1, sai lệch Pydantic schema hoặc hỏng giao tiếp API với React Frontend.
+     - Kiểm định sự tuân thủ 7 luật `R1–R7` và 6 luật `G1–G6`.
 
 5. **Quy Trình Kiểm Chứng Bắt Buộc (Verification-Driven Development - VDD):**
-   - Tuyệt đối không phán đoán hoặc giả định rằng code "chắc chắn đã chạy đúng".
-   - Sau mỗi lần can thiệp mã nguồn, bắt buộc tự chạy lệnh kiểm chứng thực tế trên Terminal (`pytest -v`, `ruff check .`, `ruff format . --check`).
-   - Với các thành phần Web/API/UI: Tự khởi chạy và kiểm tra phản hồi HTTP / giao diện thực tế trước khi bàn giao cho người dùng.
+   - Không bao giờ giả định code đã chạy đúng nếu chưa thực thi kiểm thử.
+   - Sau mỗi lần can thiệp mã nguồn, bắt buộc chạy lệnh kiểm chứng thực tế trên Terminal (`pytest -v`, `ruff check .`, `ruff format . --check`) và kiểm tra build/healthcheck của hệ thống.
 
 ---
 
-## 4. Ngăn Xếp Công Nghệ (Technical Stack)
+## 4. Ngăn Xếp Công Nghệ Sản Phẩm (Production Technical Stack)
 
-| Hạng Mục | Công Nghệ | Phiên Bản / Chi Tiết Kỹ Thuật |
+| Hạng Mục | Công Nghệ | Chi Tiết Kỹ Thuật Trong Production |
 | :--- | :--- | :--- |
-| **Ngôn Ngữ & Môi Trường** | Python | Python 3.11+, Quản lý môi trường ảo `venv` |
-| **AI / LLM Trọng Tâm** | Gemini Flash | Google GenAI SDK (`google-genai`), Structured Output qua Pydantic v2 |
-| **Mô Hình Học Máy & NLP** | ViSoBERT, Scikit-learn | `uitnlp/visobert` (fine-tuned Colab T4), TF-IDF + Logistic Regression, Rule Lexicon |
-| **Cơ Sở Dữ Liệu** | PostgreSQL | PostgreSQL 16, psycopg / SQLAlchemy Core |
-| **Backend API** | FastAPI | FastAPI 0.110+, Uvicorn, Pydantic v2 validation |
-| **Giao Diện Người Dùng** | Streamlit + Plotly | Streamlit đa trang (4 trang), Plotly tương tác trực quan |
-| **Kiểm Thử & Đóng Gói** | Pytest & Docker | `pytest`, `pytest-cov`, Docker Compose (`db`, `api`, `ui`) |
-| **Chất Lượng Code** | Ruff | Linter & Formatter siêu tốc, quy chuẩn PEP 8 |
+| **Ngôn Ngữ & Runtime** | Python 3.11+ & Node.js | Môi trường ảo `.venv` cho Backend, Vite/Node cho Frontend |
+| **AI / LLM Layer** | UnifiedLLMClient | Cloud `Gemini Flash` (`google-genai`), Local `Ollama (qwen2.5:7b)`, Self-Healing JSON Retry, `B1RuleAnalyzer` Fallback |
+| **Cơ Sở Dữ Liệu** | PostgreSQL 16 & SQLite | Hỗ trợ Dual-Backend (`database.py`), tách biệt kết nối Read-Write và Read-Only (`DATABASE_URL_RO`) |
+| **Backend REST API** | FastAPI + Uvicorn | 15 RESTful API Endpoints, OpenAPI 3.1 / Swagger UI, xác thực `X-API-Key`, kiểm toán `X-Reviewer`, Background Jobs |
+| **Frontend Web App** | React 18 + Vite 6 | TailwindCSS 3, Recharts trực quan hóa dữ liệu, Lucide Icons, giao diện điều hành hiện đại (`frontend/`) |
+| **Báo Cáo Điều Hành** | OpenPyXL + HTML/PDF | Xuất báo cáo quản trị Excel 6-sheet chuyên sâu (`.xlsx`) và báo cáo HTML chuẩn in ấn PDF (`reporting.py`) |
+| **Đóng Gói & Kiểm Thử** | Docker Compose & Pytest | Điều phối container (`db`, `api`), bộ kiểm thử tự động `pytest`, kiểm tra chất lượng mã nguồn với `ruff` |
 
 ---
 
-## 5. Cấu Trúc Thư Mục Chuẩn Của Dự Án
-
-Toàn bộ mã nguồn và tài liệu tuân thủ cấu trúc sau:
+## 5. Cấu Trúc Thư Mục Chuẩn Của Hệ Thống
 
 ```text
 ecomreview/
 ├── data/
-│   ├── raw/                  # Dữ liệu gốc Shopee/TikTok (KHÔNG commit lên Git)
-│   ├── public/               # Benchmark công khai (UIT-ViSFD / VLSP)
-│   ├── interim/              # Dữ liệu đã làm sạch & chuẩn hóa teencode
-│   ├── gold/                 # Tập dev.jsonl, test_locked.jsonl (Shop Áo Mưa)
-│   └── cache/                # Cache phản hồi Gemini theo SHA-256
-├── docs/
-│   ├── scope.md              # Phạm vi, RQ1–RQ3, giả thuyết nghiên cứu
-│   ├── annotation_guideline.md # Hướng dẫn gán nhãn 8 khía cạnh
-│   ├── data_stats.md         # Thống kê khám phá dữ liệu (EDA)
-│   └── report/               # Bản thảo báo cáo 5 chương (30–50 trang)
+│   ├── cache/                # Bộ nhớ đệm phản hồi AI theo SHA-256 (tiết kiệm token)
+│   └── ecomreview.db         # Cơ sở dữ liệu SQLite cục bộ (khi chạy chế độ local)
+├── docker/
+│   ├── api/Dockerfile        # Dockerfile đóng gói dịch vụ FastAPI Backend
+│   └── db/init.sql           # Script khởi tạo schema và quyền READ-ONLY trên PostgreSQL 16
+├── frontend/                 # Ứng dụng Web Frontend (React 18 + Vite 6 + TailwindCSS + Recharts)
+│   ├── src/
+│   │   ├── api/client.js     # HTTP Client kết nối 15 endpoints của FastAPI Backend
+│   │   ├── components/       # OverviewTab, InsightsAlertsTab, ActionsTab, ReviewsCskhTab, Modals
+│   │   └── constants/        # Định nghĩa nhãn hiển thị 8 khía cạnh ABSA
+│   └── package.json
 ├── knowledge/
-│   └── playbook_aomua.yaml   # Tri thức miền Áo mưa (12 hành động chuẩn & guardrails)
-├── models/                   # Checkpoints TF-IDF, ViSoBERT (gitignored)
-├── prompts/                  # Quản lý phiên bản Prompt (analyzer, planner, critic)
-├── results/                  # Bảng kết quả RQ1, RQ2, RQ3, trace logs JSON
-├── scripts/                  # Scripts tiền xử lý, gán nhãn, xuất báo cáo
+│   ├── playbook_aomua.yaml   # Tri thức miền vận hành (12 mẫu hành động chuẩn & ngưỡng kích hoạt)
+│   └── vn_social_lexicon.yaml # Từ điển chuẩn hóa Teencode, tiếng lóng & từ khóa cảm xúc TMĐT
+├── prompts/                  # Quản lý phiên bản System Prompts (analyzer, planner, reply)
+├── results/
+│   └── traces/               # Lưu vết thực thi State-Graph (JSON trace logs phục vụ kiểm toán)
+├── scripts/
+│   ├── ingest.py             # Công cụ CLI nạp dữ liệu hàng loạt vào hệ thống
+│   ├── migrate_sqlite_to_pg.py # Công cụ đồng bộ dữ liệu từ SQLite sang PostgreSQL 16
+│   └── seed_demo.py          # Khởi tạo dữ liệu vận hành mẫu cho môi trường mới
 ├── src/ecomreview/
-│   ├── schemas.py            # Pydantic schemas xuyên suốt pipeline
-│   ├── security.py           # Bộ lọc Prompt Injection & che giấu PII
-│   ├── normalize.py          # Tiền xử lý tiếng Việt & từ điển Teencode
-│   ├── db/                   # Kết nối & truy vấn PostgreSQL
-│   ├── analyze/              # B1 (Rule), B2 (TF-IDF), B3 (ViSoBERT), A1 (Gemini)
-│   ├── agent/                # Aggregator, InsightEngine, Planner, Critic, StateGraph
-│   ├── api/                  # FastAPI router & services
-│   ├── ui/                   # Streamlit Dashboard (4 trang)
-│   └── eval/                 # Bootstrap CI, Groundedness check, Metrics
-├── tests/                    # Toàn bộ unit tests & integration tests
-├── docker/                   # Dockerfile cho api và ui
-├── docker-compose.yml        # Điều phối 3 services (db, api, ui)
-├── pyproject.toml            # Cấu hình pythonpath, pytest, ruff
-├── requirements.txt          # Danh sách thư viện phụ thuộc
-└── README.md                 # Hướng dẫn cài đặt & vận hành 1-click
+│   ├── schemas.py            # Hợp đồng dữ liệu Pydantic v2 toàn hệ thống
+│   ├── security.py           # Khử khuẩn Prompt Injection, ẩn danh PII & cô lập thẻ XML
+│   ├── normalize.py          # Chuẩn hóa văn bản tiếng Việt & giải mã Teencode
+│   ├── llm_provider.py       # UnifiedLLMClient (Cloud Gemini + Local Ollama + Auto-Repair)
+│   ├── ingest_service.py     # Dịch vụ tiếp nhận, làm sạch và phân tích lô đánh giá mới
+│   ├── reporting.py          # Động cơ xuất báo cáo điều hành Excel 6-sheet & HTML/PDF
+│   ├── db/
+│   │   └── database.py       # Quản lý kết nối PostgreSQL 16 / SQLite & phân quyền Read-Only
+│   ├── analyze/
+│   │   ├── a1_gemini.py      # Bộ phân tích ABSA bằng LLM (Structured Output + Cache)
+│   │   ├── b1_rule.py        # Bộ phân tích quy tắc tốc độ cao (Deterministic Fallback)
+│   │   └── factory.py        # Factory khởi tạo bộ phân tích theo cấu hình vận hành
+│   ├── agent/
+│   │   ├── tools_aggregator.py # Tính toán KPI, Wilson 95% CI & kiểm thực số học
+│   │   ├── insight_engine.py # Phát hiện 5 loại Insight, xu hướng thời gian & cảnh báo Z-test
+│   │   ├── evidence_selector.py # Tuyển chọn đánh giá bằng chứng tiêu biểu nhất
+│   │   ├── planner.py        # Lập kế hoạch hành động Marketing & Vận hành
+│   │   ├── critic.py         # Kiểm duyệt tự động theo 7 luật R1–R7 & Auto-Repair
+│   │   ├── graph_runner.py   # Điều phối luồng State-Graph E2E
+│   │   └── reply_assistant.py # Trợ lý soạn thảo phản hồi CSKH tuân thủ 6 luật G1–G6
+│   └── api/
+│       ├── main.py           # 15 RESTful API Endpoints phục vụ ứng dụng Production
+│       └── security_deps.py  # Middleware xác thực X-API-Key & X-Reviewer
+├── tests/                    # Bộ kiểm thử tự động toàn diện (Unit, API, Security, Regression)
+├── Abount_System/            # Kho lưu trữ tài liệu thiết kế gốc, lịch sử thực nghiệm & nghiên cứu
+├── docker-compose.yml        # Cấu hình triển khai dịch vụ Production (PostgreSQL + FastAPI)
+├── pyproject.toml            # Cấu hình gói phần mềm, Pytest và Ruff linter
+└── README.md                 # Tài liệu hướng dẫn triển khai và vận hành hệ thống
 ```
 
 ---
 
-## 6. Taxonomy 8 Khía Cạnh Đánh Giá (ABSA Taxonomy)
+## 6. Taxonomy 8 Khía Cạnh Đánh Giá Chuẩn (ABSA Taxonomy)
 
-Hệ thống phân loại đánh giá khách hàng theo 8 khía cạnh chuẩn mực:
-1. `WATERPROOF`: Khả năng chống thấm nước, độ kín đường may ép nhiệt, độ dày chống tràn nước.
-2. `MATERIAL_DURABILITY`: Chất liệu vải (dù, PVC, tráng PU), độ bền, chống rách, độ bền nút/khóa kéo.
-3. `FIT_SIZE`: Độ vừa vặn, kích cỡ chiều dài/chiều rộng, che phủ khi ngồi xe máy hoặc đeo balo.
-4. `COMFORT_USABILITY`: Sự tiện dụng khi mặc/gấp, độ thoáng khí/hầm bí, kính chắn mưa, tay bao gương.
-5. `PRICE_VALUE`: Giá cả tương xứng chất lượng, độ đáng tiền so với kỳ vọng.
-6. `PACKAGING_SHIPPING`: Đóng gói túi/hộp, tốc độ giao hàng, thái độ shipper.
-7. `CUSTOMER_SERVICE`: Thái độ hỗ trợ tư vấn của shop, tốc độ phản hồi tin nhắn, chính sách đổi trả hàng lỗi.
-8. `ACCESSIBILITY_DESIGN`: Màu sắc, kiểu dáng thời trang, họa tiết, tính thẩm mỹ tổng thể.
+Hệ thống phân tích và giám sát chất lượng sản phẩm/dịch vụ theo 8 khía cạnh cốt lõi:
+1. `WATERPROOF`: Khả năng chống thấm nước, độ kín đường may ép nhiệt, chống tràn nước qua nẹp/cổ áo.
+2. `MATERIAL_DURABILITY`: Chất liệu vải (dù tổ ong, PVC, EVA, tráng PU), độ bền cơ học, độ bền khóa kéo/cúc bấm.
+3. `FIT_SIZE`: Độ vừa vặn kích cỡ, chiều dài vạt áo, khả năng che phủ khi ngồi xe máy hoặc đeo balo.
+4. `COMFORT_USABILITY`: Sự tiện lợi khi mặc/tháo/gấp gọn, độ thoáng khí, mùi nhựa, kính chắn mưa, chụp gương.
+5. `PRICE_VALUE`: Mức độ tương xứng giữa giá bán và giá trị nhận được, hiệu quả các gói khuyến mãi.
+6. `PACKAGING_SHIPPING`: Chất lượng túi/hộp đóng gói, tốc độ giao hàng, tình trạng hàng khi nhận.
+7. `CUSTOMER_SERVICE`: Tốc độ và thái độ tư vấn của gian hàng, quy trình hỗ trợ bảo hành và đổi trả hàng lỗi.
+8. `ACCESSIBILITY_DESIGN`: Màu sắc thực tế, kiểu dáng thời trang, dải phản quang an toàn, tính thẩm mỹ.
 
 ---
 
-## 7. Tiêu Chuẩn Kiểm Định Trước Khi Hoàn Tất Tác Vụ
+## 7. Tiêu Chuẩn Kiểm Định Trước Khi Bàn Giao (Release Gate)
 
-Trước khi kết thúc bất kỳ phiên làm việc nào, bắt buộc thực hiện kiểm tra:
-```bash
-# 1. Chạy toàn bộ test tự động
-pytest -v   # hoặc .venv\Scripts\pytest -v trên Windows
+Trước khi kết thúc bất kỳ tác vụ kỹ thuật nào, bắt buộc thực thi bộ kiểm định sau:
+```powershell
+# 1. Chạy toàn bộ bộ kiểm thử tự động (Unit + Integration + API + Regression)
+.venv\Scripts\pytest -v
 
-# 2. Kiểm tra chất lượng và định dạng mã nguồn
-ruff check .               # hoặc .venv\Scripts\python -m ruff check .
-ruff format . --check      # hoặc .venv\Scripts\python -m ruff format . --check
+# 2. Kiểm tra chất lượng mã nguồn và định dạng PEP 8
+.venv\Scripts\python -m ruff check .
+.venv\Scripts\python -m ruff format . --check
 ```
-Tất cả các bài kiểm thử phải đạt **100% Passed** và **0 lỗi lint**.
+Mọi bản cập nhật phải đạt **100% টেস্ট Passed** và **0 lỗi lint/format**.
 
 ---
 
 ## 8. Quy Tắc Hành Vi & Ghi Chú Bản Quyền (Credit Note)
 
-- **Ngôn ngữ trao đổi:** Tiếng Việt (chính xác, trọng tâm, học thuật, tôn trọng).
-- **Mã nguồn, comment:** Tiếng Anh chuyên nghiệp.
+- **Ngôn ngữ giao tiếp:** Tiếng Việt (rõ ràng, đi thẳng vào giải pháp kỹ thuật và giá trị vận hành thực tế).
+- **Mã nguồn & Comment:** Tiếng Anh chuyên nghiệp, tuân thủ PEP 8 và Google Style Guide.
 - **Quy tắc đặt tên Commit Git khi Push lên GitHub:**
-  - *Nếu người dùng yêu cầu Agent tự tạo tên commit:* Bắt buộc viết bằng **tiếng Việt**, tuyệt đối **không** dùng định dạng tiền tố `abc: xyz` (không dùng `feat:`, `fix:`, `chore:`, ...), mà phải đi thẳng vào nội dung `xyz` (Ví dụ: `hoàn thiện 10 endpoint FastAPI, dashboard Streamlit 4 trang`).
+  - *Nếu người dùng yêu cầu Agent tự tạo tên commit:* Bắt buộc viết bằng **tiếng Việt**, tuyệt đối **không** dùng định dạng tiền tố `abc: xyz` (không dùng `feat:`, `fix:`, `chore:`, ...), mà phải đi thẳng vào nội dung `xyz` (Ví dụ: `nâng cấp bộ lọc bảo mật API và tối ưu tốc độ xuất báo cáo Excel`).
   - *Nếu người dùng tự đặt tên commit:* Lấy chính xác 100% nguyên văn tên do người dùng đặt (không tự ý thêm tiền tố, dịch hoặc sửa đổi).
 - **Credit Note bắt buộc:** Mọi file mới được tạo hoặc sửa đổi có ý nghĩa phải có chữ ký tác quyền ở dòng cuối:
   - File Python, Shell, YAML: `# CreBy: MenBoyBMN`

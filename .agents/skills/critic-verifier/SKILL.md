@@ -1,25 +1,29 @@
 ---
 name: critic-verifier
-description: Kiểm định độ tin cậy và tuân thủ 7 luật xác định (R1-R7) của các đề xuất hành động marketing sinh bởi AI Agent.
+description: Kiểm định tự động độ tin cậy của Đề xuất Hành động (7 luật R1-R7 kèm Auto-Repair) và Bản nháp Phản hồi CSKH (6 luật G1-G6) trong môi trường Production.
 ---
 
-# Critic Verifier Skill
+# Production Critic & Guardrail Verifier Skill
 
-Kỹ năng này phục vụ kiểm định và phát hiện lỗi tự động đối với các đề xuất hành động (`ActionProposal`) được tạo ra từ `Action Planner`.
+Kỹ năng này phục vụ kiểm định chất lượng và an toàn nghiệp vụ tự động cho hai đầu ra quan trọng nhất của AI Agent trong **EcomReview AI**: Kế hoạch hành động (`ActionProposal`) và Bản nháp phản hồi khách hàng (`ReplyDraft`).
 
-## 1. Danh Mục 7 Luật Xác Định (Deterministic Rules)
-1. **R1 (Evidence Citation):** Mỗi đề xuất phải gắn kèm tối thiểu 2 `evidence_review_ids` thực tế từ cơ sở dữ liệu.
-2. **R2 (Metric Groundedness):** Mọi con số trong `why_rationale` (ví dụ: "chiếm 18.5%", "tăng 12 review") phải khớp 100% với dữ liệu từ `InsightEngine` hoặc `Aggregator`.
-3. **R3 (Marketing vs Ops Separation):** Nếu `action_type` thuộc `{PRODUCT_FIX, OPS}`, cờ `is_marketing` bắt buộc là `False`. Ngược lại phải là `True`.
-4. **R4 (Actionability):** Trường `what_to_do` và `how_and_when` phải chứa động từ hành động cụ thể và mốc thời gian rõ ràng (ví dụ: "trong 3 ngày", "trước đợt bão thứ Sáu").
-5. **R5 (Budget & Feasibility):** Không đề xuất các chiến dịch quảng cáo hoặc thiết bị vượt quá năng lực của cửa hàng nhỏ (SME).
-6. **R6 (E-commerce Policy Compliance):** Nghiêm cấm các đề xuất vi phạm chính sách của Shopee/TikTok Shop (như gạ khách xóa 1 sao để được đổi trả, hướng dẫn giao dịch ngoài sàn).
-7. **R7 (Non-Redundancy):** Không sinh các đề xuất trùng lặp mục tiêu trong cùng một phiên chạy State-Graph.
+## 1. Bảy Luật Xác Định Cho Kế Hoạch Hành Động (`HybridCritic` R1–R7)
+Triển khai tại `src/ecomreview/agent/critic.py`, kết hợp cơ chế **Auto-Repair** tự động sửa lỗi trước khi xuất ra giao diện:
+1. **R1 (Evidence Citation):** Mỗi đề xuất bắt buộc đính kèm tối thiểu 2 mã `evidence_review_ids` hợp lệ có thật trong CSDL.
+2. **R2 (Metric Groundedness):** Mọi con số phần trăm hoặc số lượng trong `why_rationale` phải khớp 100% với dữ liệu từ `InsightEngine` / `Aggregator` (`verify_numbers_in_statement()`).
+3. **R3 (Marketing vs. Ops Separation):** Nếu `action_type` thuộc `{PRODUCT_FIX, OPS}` thì cờ `is_marketing` bắt buộc là `False`; nếu thuộc `{LISTING_UPDATE, CONTENT, REVIEW_REPLY, PROMOTION, CUSTOMER_CARE}` thì `is_marketing` bắt buộc là `True`.
+4. **R4 (Specific Actionability):** Trường `what_to_do` và `how_and_when` phải nêu rõ hành động cụ thể, kênh thực hiện, thời hạn hoàn thành và chỉ số theo dõi (`expected_metric_Watch`).
+5. **R5 (SME Feasibility):** Giải pháp phải thiết thực, vừa sức với nhân sự và ngân sách của gian hàng vừa và nhỏ.
+6. **R6 (E-commerce Policy Compliance):** Nghiêm cấm các đề xuất vi phạm quy định của Shopee/TikTok Shop (như hối lộ khách xóa đánh giá 1 sao, kéo khách giao dịch ngoài sàn).
+7. **R7 (Non-Redundancy):** Không sinh các đề xuất trùng lặp nội dung trong cùng một đợt phân tích.
 
-## 2. Tiêu Chí Đánh Giá Của LLM-Judge (Thang Điểm 1-5)
-- **Score 1:** Hoang tưởng, bịa số liệu, vi phạm chính sách sàn nghiêm trọng.
-- **Score 3:** Số liệu đúng nhưng đề xuất chung chung, thiếu tính hành động.
-- **Score 5:** Tuyệt đối chính xác, bám sát tri thức miền áo mưa, có giá trị kinh doanh cao.
+## 2. Sáu Luật Bảo Vệ Cho Trợ Lý CSKH (`ReplyAssistant` G1–G6)
+Triển khai tại `src/ecomreview/agent/reply_assistant.py` để bảo vệ uy tín gian hàng:
+1. **G1 (No Overclaiming):** Cấm cam kết phóng đại sai thực tế (*"chống nước 100% vĩnh viễn"*).
+2. **G2 (Platform Policy Compliance):** Cấm gạ sửa sao, cấm dẫn khách qua Zalo/Facebook cá nhân.
+3. **G3 (PII & Link Safety):** Cấm chèn số điện thoại, email hoặc đường dẫn URL bên ngoài.
+4. **G4 (Length Bounds):** Độ dài phản hồi đạt chuẩn từ 40 đến 600 ký tự.
+5. **G5 (Negative Aspect Coverage):** Phản hồi trực tiếp vào đúng các khía cạnh mà khách hàng phàn nàn.
+6. **G6 (No Unauthorized Monetary Promises):** Cấm tự ý hứa hoàn tiền/tặng tiền với số tiền cụ thể khi chưa có phê duyệt.
 
 <!-- CreBy: MenBoyBMN -->
-

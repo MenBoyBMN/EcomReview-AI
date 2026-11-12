@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .badge-shopee {
+    @apply inline-flex items-center gap-1 whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-[#EE4D2D] border border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800/60;
+  }
+
+  .badge-tiktok {
+    @apply inline-flex items-center gap-1 whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-900 text-cyan-300 border border-slate-700 dark:bg-slate-800 dark:text-cyan-300 dark:border-cyan-800/60;
+  }
+}
+
+/* Custom sleek scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* CreBy: MenBoyBMN */

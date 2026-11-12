@@ -1,44 +1,27 @@
 ---
 name: academic-report-helper
-description: Hỗ trợ biên soạn và rà soát báo cáo nghiên cứu khoa học 30-50 trang theo chuẩn học thuật (IEEE/ACM/Đại học).
+description: Thiết kế và xuất Báo cáo Điều hành Doanh nghiệp (Excel 6-sheet, HTML/PDF), tài liệu kiến trúc Production, OpenAPI/Swagger và ghi chú phát hành sản phẩm.
 ---
 
-# Academic Report Helper Skill
+# Executive Business Reporting & Production Documentation Skill
 
-Kỹ năng này định hướng cấu trúc, văn phong và phương pháp tổng hợp cho báo cáo nghiên cứu khoa học 30–50 trang của dự án **EcomReview AI**.
+Kỹ năng này định hướng việc xây dựng hệ thống xuất báo cáo quản trị tự động (`src/ecomreview/reporting.py`, endpoint `GET /api/v1/reports/export`), biên soạn tài liệu kỹ thuật hệ thống Production và quản lý kho tư liệu nền tảng.
 
-## 1. Cấu Trúc Báo Cáo 5 Chương Chuẩn Mực
+## 1. Chuẩn Mực Báo Cáo Điều Hành Doanh Nghiệp (`reporting.py`)
+Hệ thống cung cấp tính năng xuất báo cáo quản trị trực tiếp cho chủ doanh nghiệp/quản lý vận hành dưới 2 định dạng:
+- **Báo Cáo Excel Chuyên Sâu 6-Sheet (`.xlsx`):**
+  1. `Executive_Summary`: Tổng quan KPI, điểm sao trung bình, tỷ lệ hài lòng/phàn nàn và cấu hình hệ thống.
+  2. `Aspect_Health_CI`: Bảng sức khỏe 8 khía cạnh kèm khoảng tin cậy bất đối xứng **Wilson 95% CI**.
+  3. `Early_Warning_Alerts`: Danh sách cảnh báo sớm các khía cạnh có tỷ lệ phàn nàn tăng đột biến (kiểm định Z-test).
+  4. `Action_Plans`: Kế hoạch hành động Marketing & Vận hành đã qua kiểm duyệt `R1–R7`, kèm điểm ưu tiên `priority_score` và trạng thái phê duyệt.
+  5. `Validated_Insights`: Các nhận định chuyên sâu đã được kiểm thực số học 100%.
+  6. `Negative_Evidence`: Danh sách các đánh giá tiêu cực tiêu biểu nhất cần bộ phận CSKH ưu tiên xử lý.
+- **Báo Cáo Điều Hành HTML / In Ấn PDF (`.html`):**
+  - Thiết kế trình bày chuyên nghiệp, hỗ trợ in ấn trực tiếp ra PDF từ trình duyệt phục vụ họp giao ban tuần/tháng.
 
-- **Chương 1: Mở Đầu (3–5 trang)**
-  - Bối cảnh TMĐT Việt Nam & phản hồi khách hàng dạng văn bản tự do.
-  - Tuyên bố bài toán & thách thức thực tế của SMEs.
-  - 3 Câu hỏi nghiên cứu (RQ1, RQ2, RQ3).
-  - Đóng góp chính của đề tài.
-
-- **Chương 2: Tổng Quan Công Trình Liên Quan (5–8 trang)**
-  - Tối thiểu 15–25 công trình học thuật (ABSA tiếng Việt, LLM Zero-shot, AI Agent trong Marketing).
-  - Bảng tổng hợp so sánh phương pháp và khoảng trống nghiên cứu (Research Gap).
-
-- **Chương 3: Phương Pháp & Kiến Trúc Hệ Thống (8–12 trang)**
-  - Chiến lược dữ liệu kép (Benchmark UIT-ViSFD + Shop Áo Mưa).
-  - Quy trình tiền xử lý teencode và an toàn Prompt Injection 4 lớp.
-  - Các mô hình Baseline (B1, B2, B3) & Mô hình đề xuất A1 (Gemini Flash).
-  - Kiến trúc State-Graph Agent thuần: Aggregator $\rightarrow$ Insight $\rightarrow$ Planner $\rightleftarrows$ Hybrid Critic.
-
-- **Chương 4: Thực Nghiệm, Kết Quả & Thảo Luận (10–15 trang)**
-  - Thiết lập thực nghiệm, độ đo Macro F1 và Bootstrap CI 95%.
-  - Kết quả trả lời RQ1, RQ2 và Ablation study.
-  - Đánh giá mù RQ3 (P0 vs P1), đo Groundedness & Actionability.
-  - Phân tích lỗi theo nguyên lý Pareto (80/20) và thảo luận giới hạn hệ thống.
-
-- **Chương 5: Kết Luận & Hướng Phát Triển (2–3 trang)**
-  - Tóm tắt kết quả đạt được.
-  - Đóng góp thực tiễn cho cửa hàng vừa và nhỏ.
-  - Hạn chế và hướng mở rộng tương lai.
-
-## 2. Tiêu Chuẩn Trích Dẫn & Văn Phong
-- **Văn phong:** Khách quan, trung lập, dùng thể thụ động hoặc ngôi thứ ba, lập luận dựa trên số liệu thực nghiệm.
-- **Trích dẫn:** Đúng quy cách chuẩn APA hoặc IEEE, đầy đủ tác giả, năm công bố và nguồn DOI/ArXiv.
+## 2. Tài Liệu Kỹ Thuật Sản Phẩm (Product & API Documentation)
+- **Tài liệu API (`OpenAPI 3.1 / Swagger UI`):** Mọi endpoint trong `src/ecomreview/api/main.py` phải có docstring, mô tả tham số và kiểu trả về rõ ràng để hiển thị trực quan tại `/docs`.
+- **Tài liệu Vận hành (`README.md`):** Hướng dẫn khởi chạy nhanh bằng Docker Compose 1-click, cấu hình biến môi trường `.env`, xác thực `X-API-Key` và kết nối Frontend.
+- **Kho Lưu Trữ Tư Liệu Gốc (`Abount_System/`):** Khi người dùng cần tra cứu hoặc cập nhật các tài liệu nghiên cứu nền tảng ban đầu, truy xuất trực tiếp trong thư mục lưu trữ `Abount_System/`.
 
 <!-- CreBy: MenBoyBMN -->
-
