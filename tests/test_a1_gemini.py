@@ -70,10 +70,31 @@ class TestA1GeminiAnalyzer:
             analysis, raw_text="Áo mưa chống nước tốt", norm_text="áo mưa chống nước tốt"
         )
         assert len(validated.opinions) == 2
+        assert validated.opinions[0].evidence_ok is True
+        assert validated.opinions[1].evidence_ok is False
+
+    def test_gemini_model_pool_env_override(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("GEMINI_MODEL", raising=False)
+        monkeypatch.delenv("GEMINI_MODEL_POOL", raising=False)
+        default_analyzer = A1GeminiAnalyzer(cache_dir=tmp_path, api_key="dummy_key")
+        assert default_analyzer.model_id == "gemini-3.5-flash"
+        assert default_analyzer.model_pool == [
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+        ]
+
+        monkeypatch.setenv("GEMINI_MODEL_POOL", "custom-flash-a,custom-flash-b")
+        analyzer = A1GeminiAnalyzer(cache_dir=tmp_path, api_key="dummy_key")
+        assert analyzer.model_pool == ["custom-flash-a", "custom-flash-b"]
 
     def test_real_gemini_api_call_with_cache(self, tmp_path):
         import os
 
+        if os.getenv("RUN_LIVE_API_TESTS") != "1":
+            return  # Offline deterministic suite by default
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key or api_key.startswith("your_"):
             return  # Skip live call if key unavailable

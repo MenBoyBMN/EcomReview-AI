@@ -1,17 +1,24 @@
 # Makefile for EcomReview AI (Pure Backend API Operations)
 
-PYTHON ?= .venv/Scripts/python.exe
-PYTEST ?= .venv/Scripts/pytest.exe
+ifeq ($(OS),Windows_NT)
+    PYTHON ?= .venv/Scripts/python.exe
+    PYTEST ?= .venv/Scripts/pytest.exe
+else
+    PYTHON ?= .venv/bin/python
+    PYTEST ?= .venv/bin/pytest
+endif
 
-.PHONY: help seed api test lint docker-up docker-down
+.PHONY: help seed api test lint frontend-dev frontend-build docker-up docker-down
 
 help:
-	@echo "EcomReview AI - Backend Production Commands:"
+	@echo "EcomReview AI - Production Commands:"
 	@echo "  make api             - Start FastAPI backend on port 8000"
 	@echo "  make seed            - Seed/verify demo database and export OpenAPI"
 	@echo "  make test            - Run full Pytest production test suite"
 	@echo "  make lint            - Run Ruff linter and format check"
-	@echo "  make docker-up       - Launch 2-service Docker Compose stack (db, api)"
+	@echo "  make frontend-dev    - Start React Vite dev server on port 5173"
+	@echo "  make frontend-build  - Build production React bundle"
+	@echo "  make docker-up       - Launch 3-service Docker Compose stack (db, api, frontend)"
 	@echo "  make docker-down     - Stop Docker Compose stack"
 
 api:
@@ -26,6 +33,12 @@ test:
 lint:
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m ruff format . --check
+
+frontend-dev:
+	npm --prefix frontend run dev
+
+frontend-build:
+	npm --prefix frontend run build
 
 docker-up:
 	docker compose up --build -d

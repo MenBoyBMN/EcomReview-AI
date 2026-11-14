@@ -37,6 +37,8 @@ import DecisionModal from './DecisionModal';
 export default function ActionsTab({
   scenarioTag,
   actions = [],
+  includeArchived = false,
+  onToggleIncludeArchived,
   onRefreshActions,
   onOpenEvidence,
   showToast,
@@ -58,7 +60,18 @@ export default function ActionsTab({
   // Impact measurement state per action
   const [impactMap, setImpactMap] = useState({});
   const [loadingImpactId, setLoadingImpactId] = useState(null);
-  const [customSinceDate, setCustomSinceDate] = useState('2026-02-01');
+  const [sinceDateMap, setSinceDateMap] = useState({});
+
+  React.useEffect(() => {
+    setLastTrace(null);
+    setImpactMap({});
+  }, [scenarioTag]);
+
+  const getActionSinceDate = (act) =>
+    sinceDateMap[act.id] ??
+    (act.created_at
+      ? String(act.created_at).slice(0, 10)
+      : new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10));
 
   const toggleExpand = (id) => {
     setExpandedIds((prev) => {
@@ -74,7 +87,8 @@ export default function ActionsTab({
 
   const statusCounts = actions.reduce(
     (acc, a) => {
-      const st = (a.status || 'PENDING').toUpperCase();
+      let st = (a.status || 'PENDING').toUpperCase();
+      if (st === 'PROPOSED') st = 'PENDING';
       acc[st] = (acc[st] || 0) + 1;
       return acc;
     },
@@ -84,8 +98,14 @@ export default function ActionsTab({
   const filteredActions = actions.filter((act) => {
     if (categoryFilter === 'MARKETING' && !act.is_marketing) return false;
     if (categoryFilter === 'OPS' && act.is_marketing) return false;
-    if (statusFilter !== 'ALL' && (act.status || 'PENDING').toUpperCase() !== statusFilter) {
-      return false;
+    let actStatus = (act.status || 'PENDING').toUpperCase();
+    if (actStatus === 'PROPOSED') actStatus = 'PENDING';
+    if (statusFilter !== 'ALL') {
+      if (statusFilter === 'APPROVED') {
+        if (actStatus !== 'APPROVED' && actStatus !== 'EDITED') return false;
+      } else if (actStatus !== statusFilter) {
+        return false;
+      }
     }
     return true;
   });
@@ -155,10 +175,12 @@ export default function ActionsTab({
     }
   };
 
-  const handleMeasureImpact = async (actionId) => {
+  const handleMeasureImpact = async (act) => {
+    const actionId = act.id;
+    const sinceDate = getActionSinceDate(act);
     try {
       setLoadingImpactId(actionId);
-      const res = await api.getActionImpact(actionId, 45, customSinceDate, 2);
+      const res = await api.getActionImpact(actionId, 45, sinceDate, 2);
       setImpactMap((prev) => ({ ...prev, [actionId]: res }));
     } catch (err) {
       showToast(err.message || 'Không thể đo hiệu quả', 'error');
@@ -236,11 +258,25 @@ export default function ActionsTab({
             onChange={setCategoryFilter}
           />
 
-          {statusFilter !== 'ALL' && (
-            <Button variant="ghost" size="sm" onClick={() => setStatusFilter('ALL')}>
-              Xóa bộ lọc trạng thái ({STATUS_META[statusFilter]?.label || statusFilter})
-            </Button>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {onToggleIncludeArchived && (
+              <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeArchived}
+                  onChange={(e) => onToggleIncludeArchived(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Hiển thị cả lịch sử đã lưu trữ</span>
+              </label>
+            )}
+
+            {statusFilter !== 'ALL' && (
+              <Button variant="ghost" size="sm" onClick={() => setStatusFilter('ALL')}>
+                Xóa bộ lọc trạng thái ({STATUS_META[statusFilter]?.label || statusFilter})
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -299,6 +335,7 @@ export default function ActionsTab({
 
                   {/* Status Badge */}
                   <div className="flex items-center gap-2 shrink-0">
+                    {act.is_archived && <Badge tone="neutral">Đã lưu trữ</Badge>}
                     <Badge tone={statusInfo.tone}>{statusInfo.label}</Badge>
                   </div>
                 </div>
@@ -449,15 +486,17 @@ export default function ActionsTab({
                         <label className="text-slate-500">Mốc ngày áp dụng:</label>
                         <input
                           type="date"
-                          value={customSinceDate}
-                          onChange={(e) => setCustomSinceDate(e.target.value)}
+                          value={getActionSinceDate(act)}
+                          onChange={(e) =>
+                            setSinceDateMap((prev) => ({ ...prev, [act.id]: e.target.value }))
+                          }
                           className="h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
                         />
                         <Button
                           variant="secondary"
                           size="sm"
                           disabled={loadingImpactId === act.id}
-                          onClick={() => handleMeasureImpact(act.id)}
+                          onClick={() => handleMeasureImpact(act)}
                         >
                           <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
                           <span>
@@ -473,13 +512,24 @@ export default function ActionsTab({
                     {impactData && (
                       <div className="p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2 text-xs">
                         <div className="font-bold text-slate-900 dark:text-white">
-                          Kết quả đối chiếu trước và sau ngày {impactData.milestone_date || customSinceDate}
+                          Kết quả đối chiếu trước và sau ngày{' '}
+                          {impactData.milestone_date || getActionSinceDate(act)}
                         </div>
-                        {impactData.status === 'insufficient_data' ? (
+                        {impactData.status === 'insufficient_data' ||
+                        impactData.status === 'missing_milestone_date' ||
+                        impactData.status === 'invalid_date_format' ||
+                        !impactData.pre_window ||
+                        !impactData.post_window ? (
                           <p className="text-amber-700 dark:text-amber-300">
-                            {impactData.note} (Trước: {impactData.pre_window?.total || 0} mẫu, Sau:{' '}
-                            {impactData.post_window?.total || 0} mẫu). Bạn có thể chọn mốc ngày{' '}
-                            <strong>2026-02-01</strong> để xem dữ liệu mẫu.
+                            {impactData.note || 'Chưa đủ dữ liệu đối chiếu cho mốc ngày đã chọn.'}
+                            {impactData.pre_window && impactData.post_window ? (
+                              <>
+                                {' '}
+                                (Trước: {impactData.pre_window.total || 0} mẫu, Sau:{' '}
+                                {impactData.post_window.total || 0} mẫu). Hãy điều chỉnh mốc ngày
+                                phù hợp với giai đoạn có đánh giá cả trước và sau can thiệp.
+                              </>
+                            ) : null}
                           </p>
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -500,8 +550,14 @@ export default function ActionsTab({
                               <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm mt-0.5">
                                 {impactData.delta_pp > 0
                                   ? `Tăng +${impactData.delta_pp}%`
-                                  : `Giảm ${impactData.delta_pp}%`}{' '}
-                                ({impactData.status === 'improved' ? 'Cải thiện rõ rệt' : 'Chưa biến động lớn'})
+                                  : impactData.delta_pp < 0
+                                  ? `Giảm ${Math.abs(impactData.delta_pp)}%`
+                                  : 'Không đổi'}{' '}
+                                ({impactData.status === 'improved'
+                                  ? 'Cải thiện rõ rệt'
+                                  : impactData.status === 'worsened'
+                                  ? 'Tăng phàn nàn đáng kể'
+                                  : 'Chưa biến động lớn'})
                               </div>
                             </div>
                           </div>

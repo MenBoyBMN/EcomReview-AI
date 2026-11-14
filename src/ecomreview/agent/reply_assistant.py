@@ -15,10 +15,14 @@ from ecomreview.security import EMAIL_RE, LINK_RE, PHONE_RE, wrap_untrusted_revi
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PLAYBOOK_PATH = Path("knowledge/playbook_aomua.yaml")
-PROMPT_PATH = Path("prompts/reply_v1.md")
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_PLAYBOOK_PATH = _PROJECT_ROOT / "knowledge" / "playbook_aomua.yaml"
+PROMPT_PATH = _PROJECT_ROOT / "prompts" / "reply_v1.md"
 
-MONEY_PROMISE_RE = re.compile(r"\b\d+\s?(?:k|đ|vnđ|nghìn|triệu|percent|%)\b", re.IGNORECASE)
+MONEY_PROMISE_RE = re.compile(
+    r"\b\d+(?:[.,]\d{3})*\s?(?:(?:k|đ|đồng|vnđ|vnd|nghìn|ngàn|triệu|percent)\b|%)",
+    re.IGNORECASE,
+)
 
 ASPECT_KEYWORDS: dict[str, list[str]] = {
     "WATERPROOF": ["thấm", "nước", "mưa", "đường may", "ướt", "dột", "seam"],
@@ -29,6 +33,19 @@ ASPECT_KEYWORDS: dict[str, list[str]] = {
     "PACKAGING_SHIPPING": ["giao", "ship", "đóng gói", "hộp", "túi", "vận chuyển"],
     "CUSTOMER_SERVICE": ["tư vấn", "cskh", "chăm sóc", "hỗ trợ", "tin nhắn", "thái độ"],
     "ACCESSIBILITY_DESIGN": ["màu", "mẫu", "kiểu", "đẹp", "dáng"],
+    "GENERAL": ["phản hồi", "góp ý", "ghi nhận", "trải nghiệm", "hỗ trợ"],
+}
+
+ASPECT_SHORT_PHRASES: dict[str, str] = {
+    "WATERPROOF": "chống thấm nước",
+    "MATERIAL_DURABILITY": "chất liệu vải & độ bền",
+    "FIT_SIZE": "kích cỡ size",
+    "COMFORT_USABILITY": "độ tiện dụng thoáng khí",
+    "PRICE_VALUE": "giá cả",
+    "PACKAGING_SHIPPING": "đóng gói & giao hàng",
+    "CUSTOMER_SERVICE": "chăm sóc hỗ trợ",
+    "ACCESSIBILITY_DESIGN": "màu sắc & kiểu dáng",
+    "GENERAL": "trải nghiệm chung",
 }
 
 
@@ -79,16 +96,20 @@ def check_reply_guardrails(
             violations.append(f"G1 (Overclaim): Chứa cụm từ cam kết quá mức '{kw}'.")
 
     # G2: Platform Policy Compliance
-    prohibited_kws = guardrails.get(
-        "prohibited_policy_keywords",
-        [
-            "tặng tiền đổi 5 sao",
-            "hoàn tiền nếu đánh giá 5 sao",
-            "xóa đánh giá 1 sao",
-            "chuyển khoản ngoài sàn",
-            "zalo cá nhân",
-        ],
-    )
+    default_prohibited = [
+        "tặng tiền đổi 5 sao",
+        "hoàn tiền nếu đánh giá 5 sao",
+        "xóa đánh giá 1 sao",
+        "chuyển khoản ngoài sàn",
+        "zalo cá nhân",
+    ]
+    prohibited_kws = list(default_prohibited)
+    existing_prohibited_lower = {k.lower() for k in prohibited_kws}
+    for kw in guardrails.get("prohibited_policy_keywords", []):
+        kw_s = str(kw)
+        if kw_s.lower() not in existing_prohibited_lower:
+            prohibited_kws.append(kw_s)
+            existing_prohibited_lower.add(kw_s.lower())
     for kw in prohibited_kws:
         if kw.lower() in text_lower:
             violations.append(
@@ -117,10 +138,10 @@ def check_reply_guardrails(
             kws = ASPECT_KEYWORDS.get(asp, [asp.lower()])
             if not any(k in text_lower for k in kws):
                 unaddressed.append(asp)
-        if len(unaddressed) == len(negative_aspects) and negative_aspects:
+        if unaddressed:
             violations.append(
-                f"G5 (Aspect Coverage): Phản hồi chưa đề cập trực diện đến vấn đề "
-                f"khách hàng phàn nàn: {', '.join(negative_aspects)}."
+                f"G5 (Aspect Coverage): Phản hồi chưa đề cập trực diện đến các vấn đề "
+                f"khách hàng phàn nàn: {', '.join(unaddressed)}."
             )
 
     # G6: No specific monetary promises
@@ -151,10 +172,37 @@ def build_template_reply(
     handlers = templates.get("aspect_handlers", {})
 
     body_sentences: list[str] = []
+    chosen_aspects: list[str] = []
+    skipped_aspects: list[str] = []
     if negative_aspects:
         for asp in negative_aspects:
             if asp in handlers and handlers[asp] not in body_sentences:
-                body_sentences.append(handlers[asp])
+                joined_body = " ".join(body_sentences + [handlers[asp]])
+                cand_text = f"{greeting} {joined_body} {closing}".strip()
+                if len(cand_text) <= 580:
+                    body_sentences.append(handlers[asp])
+                    chosen_aspects.append(asp)
+                else:
+                    skipped_aspects.append(asp)
+
+    if skipped_aspects:
+        while True:
+            phrases = [ASPECT_SHORT_PHRASES.get(a, a.lower()) for a in skipped_aspects]
+            extra_note = f"Shop cũng ghi nhận góp ý về {', '.join(phrases)} để cải thiện ngay ạ."
+            cand_with_extra = (
+                f"{greeting} {' '.join(body_sentences)} {extra_note} {closing}".strip()
+            )
+            if len(cand_with_extra) <= 600:
+                body_sentences.append(extra_note)
+                break
+            if not body_sentences:
+                max_note_len = max(40, 590 - len(greeting) - len(closing))
+                if len(extra_note) > max_note_len:
+                    extra_note = extra_note[: max_note_len - 3].rstrip() + "..."
+                body_sentences.append(extra_note)
+                break
+            body_sentences.pop()
+            skipped_aspects.insert(0, chosen_aspects.pop())
 
     if not body_sentences:
         body_sentences.append(
@@ -165,8 +213,10 @@ def build_template_reply(
             )
         )
 
-    body_text = " ".join(body_sentences)
-    return f"{greeting} {body_text} {closing}".strip()
+    res_text = f"{greeting} {' '.join(body_sentences)} {closing}".strip()
+    if len(res_text) > 600:
+        res_text = res_text[:595].rstrip() + "..."
+    return res_text
 
 
 def generate_customer_reply(
@@ -175,6 +225,7 @@ def generate_customer_reply(
     mode: str = "template",
     db: DatabaseManager | None = None,
     playbook_path: str | Path = DEFAULT_PLAYBOOK_PATH,
+    llm_client: Any | None = None,
 ) -> dict[str, Any]:
     """Generate and verify customer service reply draft for a given review."""
     db_mgr = db or DatabaseManager()
@@ -202,9 +253,9 @@ def generate_customer_reply(
 
     if mode == "llm":
         try:
-            from ecomreview.llm_provider import UnifiedLLMClient
+            from ecomreview.llm_provider import get_default_llm_client
 
-            llm_client = UnifiedLLMClient()
+            client = llm_client or get_default_llm_client()
             system_prompt = (
                 PROMPT_PATH.read_text(encoding="utf-8")
                 if PROMPT_PATH.exists()
@@ -217,7 +268,7 @@ def generate_customer_reply(
                 f"Các khía cạnh bị chê: {asp_str}.\n"
                 f"Hãy tạo bản nháp phản hồi CSKH chuẩn mực thỏa mãn các quy tắc G1-G6."
             )
-            draft: ReplyDraft = llm_client.generate_structured(
+            draft: ReplyDraft = client.generate_structured(
                 prompt=user_prompt,
                 schema_cls=ReplyDraft,
                 system_instruction=system_prompt,
@@ -234,7 +285,7 @@ def generate_customer_reply(
                     "LLM reply violated guardrails %s. Retrying once...", report.violations
                 )
                 user_prompt += f"\n\nLưu ý sửa các lỗi sau: {'; '.join(report.violations)}"
-                retry_draft: ReplyDraft = llm_client.generate_structured(
+                retry_draft: ReplyDraft = client.generate_structured(
                     prompt=user_prompt,
                     schema_cls=ReplyDraft,
                     system_instruction=system_prompt,
@@ -246,15 +297,21 @@ def generate_customer_reply(
                 if retry_report.passed:
                     reply_text = retry_draft.reply_text.strip()
                     report = retry_report
+                    addressed = [
+                        a.value if hasattr(a, "value") else str(a)
+                        for a in retry_draft.addressed_aspects
+                    ]
                 else:
                     logger.warning("Retry still violated guardrails. Falling back to template.")
                     reply_text = build_template_reply(neg_aspects, review_id, playbook_path)
                     actual_mode = "llm+template_fallback"
+                    addressed = list(neg_aspects)
                     report = check_reply_guardrails(reply_text, neg_aspects, playbook_path)
         except Exception as e:
             logger.warning("LLM reply generation failed: %s. Using template fallback.", e)
             reply_text = build_template_reply(neg_aspects, review_id, playbook_path)
             actual_mode = "template_fallback"
+            addressed = list(neg_aspects)
             report = check_reply_guardrails(reply_text, neg_aspects, playbook_path)
     else:
         reply_text = build_template_reply(neg_aspects, review_id, playbook_path)

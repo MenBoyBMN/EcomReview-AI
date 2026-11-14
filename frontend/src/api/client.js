@@ -1,13 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-function buildHeaders(extra = {}) {
+function buildHeaders(extra = {}, includeJsonContentType = false) {
   const apiKey = localStorage.getItem('ecomreview_api_key') || '';
   const reviewer = localStorage.getItem('ecomreview_reviewer') || 'chu_shop_aomua';
   const headers = {
-    'Content-Type': 'application/json',
     'X-Reviewer': reviewer,
     ...extra,
   };
+  if (includeJsonContentType && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (apiKey) {
     headers['X-API-Key'] = apiKey;
   }
@@ -16,16 +18,28 @@ function buildHeaders(extra = {}) {
 
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
+  const hasJsonBody = options.body !== undefined && !(options.body instanceof FormData);
   const response = await fetch(url, {
     ...options,
-    headers: buildHeaders(options.headers),
+    headers: buildHeaders(options.headers, hasJsonBody),
   });
 
   if (!response.ok) {
     let errorDetail = `HTTP ${response.status}`;
     try {
       const errJson = await response.json();
-      errorDetail = errJson.detail || errJson.message || errorDetail;
+      const detail = errJson.detail;
+      if (Array.isArray(detail)) {
+        errorDetail = detail
+          .map((d) =>
+            typeof d === 'object' && d !== null ? d.msg || JSON.stringify(d) : String(d)
+          )
+          .join('; ');
+      } else if (typeof detail === 'object' && detail !== null) {
+        errorDetail = JSON.stringify(detail);
+      } else {
+        errorDetail = detail || errJson.message || errorDetail;
+      }
     } catch {
       // ignore json parse error
     }
@@ -43,6 +57,29 @@ export const api = {
     request('/api/v1/reviews/upload', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  // 16. POST /api/v1/reviews/upload-file
+  uploadReviewFile: (formData) =>
+    request('/api/v1/reviews/upload-file', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  // 17. GET /api/v1/reviews/{review_id}/replies
+  getReviewReplies: (reviewId, scenarioTag = 'real_shop') => {
+    const q = new URLSearchParams({ scenario_tag: scenarioTag });
+    return request(`/api/v1/reviews/${encodeURIComponent(reviewId)}/replies?${q.toString()}`);
+  },
+
+  // 18. POST /api/v1/reviews/replies/{reply_id}/status
+  updateReplyStatus: (replyId, status, replyText = null) =>
+    request(`/api/v1/reviews/replies/${replyId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({
+        status,
+        ...(replyText !== null ? { reply_text: replyText } : {}),
+      }),
     }),
 
   // 3. POST /api/v1/analyze/run
@@ -78,12 +115,18 @@ export const api = {
     }),
 
   // 8. GET /api/v1/actions
-  getActions: (scenarioTag = 'real_shop', isMarketing = null, status = '') => {
+  getActions: (
+    scenarioTag = 'real_shop',
+    isMarketing = null,
+    status = '',
+    includeArchived = false
+  ) => {
     const q = new URLSearchParams({ scenario_tag: scenarioTag });
     if (isMarketing !== null && isMarketing !== undefined && isMarketing !== '') {
       q.set('is_marketing', String(isMarketing));
     }
     if (status) q.set('status', status);
+    if (includeArchived) q.set('include_archived', 'true');
     return request(`/api/v1/actions?${q.toString()}`);
   },
 
@@ -159,13 +202,32 @@ export const api = {
     return request(`/api/v1/actions/${actionId}/impact?${q.toString()}`);
   },
 
-  // 15. GET /api/v1/reports/export
-  getReportExportUrl: (scenarioTag = 'real_shop', format = 'xlsx') => {
+  // 15. GET /api/v1/reports/export with Auth headers
+  downloadReport: async (scenarioTag = 'real_shop', format = 'xlsx') => {
     const q = new URLSearchParams({
       scenario_tag: scenarioTag,
       format,
     });
-    return `${API_BASE}/api/v1/reports/export?${q.toString()}`;
+    const url = `${API_BASE}/api/v1/reports/export?${q.toString()}`;
+    const res = await fetch(url, {
+      headers: buildHeaders(),
+    });
+    if (!res.ok) {
+      throw new Error(`Tải báo cáo thất bại (${res.status} ${res.statusText})`);
+    }
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    if (format === 'html') {
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `EcomReview_Report_${scenarioTag}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
   },
 };
 

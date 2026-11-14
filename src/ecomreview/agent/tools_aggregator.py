@@ -21,6 +21,7 @@ def wilson_ci_pct(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """Compute 95% Wilson Score Confidence Interval (in %) for proportion k/n."""
     if n <= 0:
         return 0.0, 0.0
+    k = max(0, min(int(k), int(n)))
     p = k / n
     denom = 1.0 + (z * z) / n
     center = p + (z * z) / (2.0 * n)
@@ -115,42 +116,21 @@ def get_platform_gap_stats(
     min_n: int = 5,
     db: DatabaseManager | None = None,
 ) -> list[dict[str, Any]]:
-    """Compare negative rates per aspect between Shopee and TikTok Shop."""
-    db_mgr = db or DatabaseManager()
-    shopee_stats = {
-        s["aspect"]: s
-        for s in get_aspect_sentiment_stats(
-            scenario_tag=scenario_tag, platform="shopee", min_n=min_n, db=db_mgr
-        )
-    }
-    tiktok_stats = {
-        s["aspect"]: s
-        for s in get_aspect_sentiment_stats(
-            scenario_tag=scenario_tag, platform="tiktok", min_n=min_n, db=db_mgr
-        )
-    }
-
-    gaps: list[dict[str, Any]] = []
-    common_aspects = sorted(set(shopee_stats.keys()) & set(tiktok_stats.keys()))
-    for asp in common_aspects:
-        sh = shopee_stats[asp]
-        tk = tiktok_stats[asp]
-        gap_pct = round(abs(sh["neg_pct"] - tk["neg_pct"]), 1)
-        if gap_pct >= 20.0:
-            higher_platform = "shopee" if sh["neg_pct"] > tk["neg_pct"] else "tiktok"
-            gaps.append(
-                {
-                    "aspect": asp,
-                    "shopee_neg_pct": sh["neg_pct"],
-                    "shopee_total": sh["total"],
-                    "tiktok_neg_pct": tk["neg_pct"],
-                    "tiktok_total": tk["total"],
-                    "gap_pct": gap_pct,
-                    "higher_platform": higher_platform,
-                    "confidence": _confidence_tier(min(sh["total"], tk["total"])),
-                }
-            )
-    return sorted(gaps, key=lambda x: x["gap_pct"], reverse=True)
+    """Compare negative rates per aspect between Shopee and TikTok Shop (gap >= 20 pp)."""
+    return [
+        {
+            "aspect": item["aspect"],
+            "shopee_neg_pct": item["shopee_neg_pct"],
+            "shopee_total": item["shopee_total"],
+            "tiktok_neg_pct": item["tiktok_neg_pct"],
+            "tiktok_total": item["tiktok_total"],
+            "gap_pct": item["gap_pct"],
+            "higher_platform": item["higher_platform"],
+            "confidence": item["confidence"],
+        }
+        for item in get_platform_comparison(scenario_tag=scenario_tag, min_n=min_n, db=db)
+        if item["gap_pct"] >= 20.0 and item["higher_platform"] in {"shopee", "tiktok"}
+    ]
 
 
 def get_hidden_complaints(
@@ -185,51 +165,6 @@ def get_hidden_complaints(
                 "text_raw": str(r["text_raw"]),
                 "aspect": str(r["aspect"]),
                 "evidence": str(r["evidence"]),
-            }
-            for r in rows
-        ]
-
-
-def get_reviews_by_aspect(
-    scenario_tag: str = "real_shop",
-    aspect: str = "WATERPROOF",
-    polarity: str = "negative",
-    limit: int = 5,
-    db: DatabaseManager | None = None,
-) -> list[dict[str, Any]]:
-    """Retrieve original reviews for a specific aspect and polarity (prioritizing evidence_ok)."""
-    db_mgr = db or DatabaseManager()
-    sql = """
-        SELECT
-            r.review_id,
-            r.platform,
-            r.rating,
-            r.text_raw,
-            o.aspect,
-            o.polarity,
-            o.evidence,
-            o.evidence_ok
-        FROM reviews r
-        JOIN opinions o
-          ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
-        WHERE r.scenario_tag = ?
-          AND o.aspect = ?
-          AND o.polarity = ?
-        ORDER BY o.evidence_ok DESC, LENGTH(r.text_raw) DESC
-        LIMIT ?
-    """
-    with db_mgr.get_connection(read_only=True) as conn:
-        rows = conn.execute(sql, (scenario_tag, aspect, polarity, limit)).fetchall()
-        return [
-            {
-                "review_id": str(r["review_id"]),
-                "platform": str(r["platform"]),
-                "rating": int(r["rating"]),
-                "text_raw": str(r["text_raw"]),
-                "aspect": str(r["aspect"]),
-                "polarity": str(r["polarity"]),
-                "evidence": str(r["evidence"]),
-                "evidence_ok": bool(r["evidence_ok"]),
             }
             for r in rows
         ]
@@ -271,6 +206,7 @@ def get_aspect_trend(
     aspect: str | None = None,
     period: str = "month",
     min_n: int = 3,
+    as_of: str | None = None,
     db: DatabaseManager | None = None,
 ) -> list[dict[str, Any]]:
     """Aggregate review opinions by chronological period (month or week) with Wilson 95% CI.
@@ -280,6 +216,7 @@ def get_aspect_trend(
         aspect: Optional aspect filter. If None, computes overall and aspect breakdown.
         period: 'month' (YYYY-MM) or 'week' (YYYY-Www).
         min_n: Minimum sample size per period bucket to include.
+        as_of: Optional cutoff date for evaluation (defaults to latest available date).
         db: DatabaseManager instance.
 
     Returns:
@@ -293,6 +230,9 @@ def get_aspect_trend(
         WHERE r.scenario_tag = ? AND r.created_at IS NOT NULL AND r.created_at != ''
     """
     params: list[Any] = [scenario_tag]
+    if as_of:
+        query += " AND r.created_at <= ?"
+        params.append(str(as_of)[:10])
     if aspect and aspect != "ALL":
         query += " AND o.aspect = ?"
         params.append(aspect)
@@ -332,7 +272,9 @@ def get_aspect_trend(
         if tot < min_n:
             continue
         neg_c = data["neg"]
+        pos_c = data["pos"]
         neg_pct = round((neg_c / tot) * 100.0, 1) if tot > 0 else 0.0
+        pos_pct = round((pos_c / tot) * 100.0, 1) if tot > 0 else 0.0
         ci_low, ci_high = wilson_ci_pct(neg_c, tot)
         trend_list.append(
             {
@@ -340,9 +282,10 @@ def get_aspect_trend(
                 "aspect": aspect or "ALL",
                 "total": tot,
                 "neg_count": neg_c,
-                "pos_count": data["pos"],
+                "pos_count": pos_c,
                 "neu_count": data["neu"],
                 "neg_pct": neg_pct,
+                "pos_pct": pos_pct,
                 "wilson_ci_low": ci_low,
                 "wilson_ci_high": ci_high,
                 "confidence": _confidence_tier(tot),
@@ -395,7 +338,8 @@ def detect_trend_alerts(
             scenario_tag=scenario_tag,
             aspect=asp,
             period=period,
-            min_n=min_n,
+            min_n=1,
+            as_of=as_of,
             db=db_mgr,
         )
         if len(trend) < 2:
@@ -406,7 +350,7 @@ def detect_trend_alerts(
 
         base_tot = sum(p["total"] for p in preceding)
         base_neg = sum(p["neg_count"] for p in preceding)
-        if base_tot < min_n:
+        if latest_bucket["total"] < min_n or base_tot < min_n:
             continue
 
         base_pct = round((base_neg / base_tot) * 100.0, 1)
@@ -535,6 +479,8 @@ def get_action_impact(
     Returns:
         Impact analysis report with pre/post negative rates, Wilson CI, and status.
     """
+    window_days = max(1, int(window_days))
+    min_n = max(1, int(min_n))
     db_mgr = db or DatabaseManager()
     with db_mgr.get_connection(read_only=True) as conn:
         act_row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
@@ -542,7 +488,9 @@ def get_action_impact(
             return {"action_id": action_id, "status": "action_not_found"}
 
         dec_row = conn.execute(
-            "SELECT * FROM action_feedback WHERE action_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT * FROM action_feedback "
+            "WHERE action_id = ? AND decision IN ('APPROVED', 'EDITED') "
+            "ORDER BY id DESC LIMIT 1",
             (action_id,),
         ).fetchone()
 
@@ -569,7 +517,8 @@ def get_action_impact(
     insight_ids = []
     try:
         raw_iids = act_row["insight_ids"]
-        insight_ids = json.loads(raw_iids) if isinstance(raw_iids, str) else list(raw_iids)
+        raw_list = json.loads(raw_iids) if isinstance(raw_iids, str) else list(raw_iids)
+        insight_ids = [int(x) for x in raw_list if str(x).isdigit()]
     except Exception:
         insight_ids = []
 
@@ -582,7 +531,7 @@ def get_action_impact(
                 (*insight_ids, scenario_tag),
             ).fetchall()
             for i_row in i_rows:
-                if i_row and i_row["aspect"] and str(i_row["aspect"]) != "GENERAL":
+                if i_row and i_row["aspect"]:
                     target_aspects.append(str(i_row["aspect"]))
 
     target_aspects = list(dict.fromkeys(target_aspects))
@@ -602,7 +551,9 @@ def get_action_impact(
             SUM(CASE WHEN o.polarity = 'negative' THEN 1 ELSE 0 END) AS neg_count
         FROM reviews r
         JOIN opinions o ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
-        WHERE r.scenario_tag = ? AND r.created_at >= ? AND r.created_at < ? {aspect_filter}
+        WHERE r.scenario_tag = ?
+          AND substr(r.created_at, 1, 10) >= ?
+          AND substr(r.created_at, 1, 10) < ? {aspect_filter}
     """
 
     with db_mgr.get_connection(read_only=True) as conn:
@@ -614,7 +565,7 @@ def get_action_impact(
     post_tot = int(post_res["total"] or 0)
     post_neg = int(post_res["neg_count"] or 0)
 
-    if pre_tot < min_n or post_tot < min_n:
+    if pre_tot == 0 or post_tot == 0 or pre_tot < min_n or post_tot < min_n:
         return {
             "action_id": action_id,
             "scenario_tag": scenario_tag,

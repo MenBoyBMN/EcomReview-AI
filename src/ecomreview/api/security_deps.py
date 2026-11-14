@@ -35,7 +35,10 @@ def get_current_reviewer(
 ) -> str:
     """Extract reviewer name from X-Reviewer header for audit logging."""
     if x_reviewer and x_reviewer.strip():
-        return x_reviewer.strip()
+        # Strip control characters, formula injection prefixes and limit length
+        clean = "".join(c for c in x_reviewer.strip() if c.isprintable() and c not in "\r\n\t")
+        clean = clean.lstrip("=+@-")
+        return (clean or "shop_owner")[:64]
     return "shop_owner"
 
 

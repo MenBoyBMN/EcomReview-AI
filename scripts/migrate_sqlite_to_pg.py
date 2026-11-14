@@ -7,14 +7,15 @@ import logging
 import os
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 try:
     import psycopg
-    from psycopg.rows import dict_row
 except ImportError:
     psycopg = None
-    dict_row = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ TABLES = [
     "insights",
     "actions",
     "action_feedback",
+    "review_replies",
     "system_jobs_audit",
 ]
 
@@ -44,14 +46,15 @@ def migrate_sqlite_to_postgres(
     Returns:
         Total number of records migrated.
     """
+    load_dotenv()
     if not psycopg:
         logger.error("psycopg is not installed. Cannot migrate to PostgreSQL.")
-        return 0
+        return -1
 
     url = pg_url or os.getenv("DATABASE_URL")
     if not url:
         logger.error("No PostgreSQL URL configured (DATABASE_URL is empty).")
-        return 0
+        return -1
 
     sqlite_file = Path(sqlite_path)
     if not sqlite_file.exists():
@@ -78,14 +81,17 @@ def migrate_sqlite_to_postgres(
                         return 0
 
         # Run init.sql to ensure tables exist
-        init_sql = Path("docker/db/init.sql")
+        project_root = Path(__file__).resolve().parents[1]
+        init_sql = project_root / "docker" / "db" / "init.sql"
+        if not init_sql.exists():
+            init_sql = Path("docker/db/init.sql")
         if init_sql.exists():
             with pg_conn.cursor() as cur:
                 cur.execute(init_sql.read_text(encoding="utf-8"))
             pg_conn.commit()
 
         total_migrated = 0
-        with sqlite3.connect(sqlite_file) as sl_conn:
+        with closing(sqlite3.connect(sqlite_file)) as sl_conn:
             sl_conn.row_factory = sqlite3.Row
 
             for table in TABLES:
@@ -98,27 +104,51 @@ def migrate_sqlite_to_postgres(
                 if not rows:
                     continue
 
+                valid_action_ids: set[int] | None = None
+                if table == "action_feedback":
+                    with pg_conn.cursor() as cur:
+                        cur.execute("SELECT id FROM actions")
+                        valid_action_ids = {int(row[0]) for row in cur.fetchall()}
+
                 cols = list(rows[0].keys())
                 col_names = ", ".join(cols)
                 placeholders = ", ".join(["%s"] * len(cols))
 
+                inserted_for_table = 0
+                skipped_orphans = 0
                 with pg_conn.cursor() as cur:
                     for r in rows:
+                        if (
+                            valid_action_ids is not None
+                            and int(r["action_id"]) not in valid_action_ids
+                        ):
+                            skipped_orphans += 1
+                            continue
                         vals = tuple(r[c] for c in cols)
                         cur.execute(
                             f"INSERT INTO {table} ({col_names}) "  # noqa: S608
                             f"VALUES ({placeholders}) ON CONFLICT DO NOTHING",
                             vals,
                         )
-                total_migrated += len(rows)
-                logger.info("Migrated %d rows into %s", len(rows), table)
+                        if cur.rowcount and cur.rowcount > 0:
+                            inserted_for_table += cur.rowcount
+
+                if skipped_orphans:
+                    logger.warning(
+                        "Skipped %d orphan rows in %s referencing missing action_id",
+                        skipped_orphans,
+                        table,
+                    )
+                total_migrated += inserted_for_table
+                logger.info("Migrated %d rows into %s", inserted_for_table, table)
 
                 # Reset Postgres sequence for SERIAL / BIGSERIAL primary keys
                 if table != "reviews":
                     with pg_conn.cursor() as cur:
                         cur.execute(
                             f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "  # noqa: S608
-                            f"COALESCE((SELECT MAX(id) FROM {table}), 1), true);"
+                            f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
+                            f"(SELECT MAX(id) IS NOT NULL FROM {table}));"
                         )
 
         pg_conn.commit()

@@ -2,6 +2,7 @@
 
 from ecomreview.agent.insight_engine import InsightEngine, verify_numbers_in_statement
 from ecomreview.db.database import DatabaseManager
+from ecomreview.schemas import InsightStatement
 
 
 class TestInsightEngine:
@@ -59,6 +60,50 @@ class TestInsightEngine:
         for ins in insights:
             assert verify_numbers_in_statement(ins["statement"], ins["numbers"]) is True
             assert len(ins["evidence_ids"]) >= 2
+
+    def test_insight_llm_mode_accepts_grounded_and_rejects_hallucinated(self, tmp_path):
+        db = DatabaseManager(tmp_path / "test_ins_llm.db")
+        for i in range(6):
+            pol = "negative" if i < 3 else "positive"
+            db.upsert_review_and_opinions(
+                review_id=f"shp_{i:04d}",
+                platform="shopee",
+                shop="shop_a",
+                product="ao_mua",
+                rating=2 if i < 3 else 5,
+                text_raw=f"Đánh giá {i} về khả năng chống thấm nước của áo mưa",
+                text_norm=f"đánh giá {i} về khả năng chống thấm nước của áo mưa",
+                source="review",
+                scenario_tag="llm_scen",
+                overall_sentiment=pol,
+                informative=True,
+                opinions=[{"aspect": "WATERPROOF", "polarity": pol, "evidence": "chống thấm nước"}],
+            )
+
+        class _GroundedLLM:
+            def generate_structured(self, prompt, schema_cls, system_instruction=""):
+                return InsightStatement(
+                    statement=(
+                        "Khía cạnh chống thấm nước ghi nhận 3/6 phản hồi phàn nàn "
+                        "(50.0%, khoảng tin cậy 95% CI 18.8% đến 81.2%)."
+                    )
+                )
+
+        engine_ok = InsightEngine(db=db, llm_client=_GroundedLLM(), use_llm=True)
+        ins_ok = engine_ok.generate_insights(scenario_tag="llm_scen", min_n=5, persist=False)
+        assert any(i.get("statement_source") == "llm" for i in ins_ok)
+
+        class _HallucinatingLLM:
+            def generate_structured(self, prompt, schema_cls, system_instruction=""):
+                return InsightStatement(
+                    statement="Có tới 99.9% khách hàng trong tổng số 500 người phàn nàn."
+                )
+
+        engine_bad = InsightEngine(db=db, llm_client=_HallucinatingLLM(), use_llm=True)
+        ins_bad = engine_bad.generate_insights(scenario_tag="llm_scen", min_n=5, persist=False)
+        assert all(i.get("statement_source") == "template" for i in ins_bad)
+        for ins in ins_bad:
+            assert verify_numbers_in_statement(ins["statement"], ins["numbers"]) is True
 
 
 # CreBy: MenBoyBMN

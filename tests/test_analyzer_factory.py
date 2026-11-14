@@ -4,7 +4,7 @@ import pytest
 
 from ecomreview.analyze.a1_gemini import A1GeminiAnalyzer
 from ecomreview.analyze.b1_rule import B1RuleAnalyzer
-from ecomreview.analyze.factory import SUPPORTED_METHODS, get_analyzer
+from ecomreview.analyze.factory import SUPPORTED_METHODS, OllamaABSAAnalyzer, get_analyzer
 
 
 class TestAnalyzerFactory:
@@ -29,6 +29,15 @@ class TestAnalyzerFactory:
         """Ensure all canonical methods are listed in SUPPORTED_METHODS."""
         assert "b1_rule" in SUPPORTED_METHODS
         assert "a1_gemini_v2" in SUPPORTED_METHODS
+        assert "a1_ollama" in SUPPORTED_METHODS
+
+    def test_factory_resolves_a1_ollama_with_offline_fallback(self, monkeypatch):
+        """Verify factory resolves a1_ollama and falls back to B1 when Ollama is offline."""
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:59999")
+        analyzer = get_analyzer("a1_ollama")
+        assert isinstance(analyzer, OllamaABSAAnalyzer)
+        res = analyzer.analyze_review("Áo mưa bị rách đường may")
+        assert len(res.opinions) >= 1
 
     def test_a1_fast_fallback_without_api_key(self, monkeypatch):
         """Verify A1 immediately falls back to B1 without network latency when no key is present."""

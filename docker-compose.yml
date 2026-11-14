@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom_password}
       POSTGRES_DB: ${POSTGRES_DB:-ecomreview}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
     volumes:
       - ./docker/db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - pgdata:/var/lib/postgresql/data
@@ -22,13 +22,23 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     container_name: ecomreview_api
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DEMO_CACHE_MODE: "true"
+      DEMO_CACHE_MODE: "${DEMO_CACHE_MODE:-true}"
       ECOMREVIEW_DB_BACKEND: "postgres"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
       DATABASE_URL_RO: "postgresql://ecom_agent_ro:agent_readonly_pass@db:5432/${POSTGRES_DB:-ecomreview}"
       ECOMREVIEW_API_KEY: "${ECOMREVIEW_API_KEY:-}"
+      ECOMREVIEW_CORS_ORIGINS: "${ECOMREVIEW_CORS_ORIGINS:-*}"
       ECOMREVIEW_SQLITE_PATH: "/app/data/ecomreview.db"
+      ECOMREVIEW_TRACE_DIR: "/app/results/traces"
+      ECOMREVIEW_AGENT_LLM: "${ECOMREVIEW_AGENT_LLM:-false}"
+      ECOMREVIEW_LLM_ENGINE: "${ECOMREVIEW_LLM_ENGINE:-gemini}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_MODEL_POOL: "${GEMINI_MODEL_POOL:-}"
     command: sh -c "python scripts/migrate_sqlite_to_pg.py --if-empty && uvicorn ecomreview.api.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
@@ -37,6 +47,22 @@ services:
       - ./results:/app/results
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: ecomreview_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
         condition: service_healthy
 
 volumes:

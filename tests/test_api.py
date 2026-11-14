@@ -19,6 +19,7 @@ class TestEcomReviewAPI:
         assert r_health.status_code == 200
         assert r_health.json()["status"] == "healthy"
         assert r_health.json()["endpoints_count"] == 15
+        assert r_health.json()["extended_endpoints_count"] == 18
 
         # 2. POST /api/v1/reviews/upload
         upload_payload = {
@@ -193,6 +194,144 @@ class TestEcomReviewAPI:
         # Protected route with valid key -> 200
         r_ok = client.get("/api/v1/insights", headers={"X-API-Key": "secret_token_123"})
         assert r_ok.status_code == 200
+
+    def test_upload_file_csv_xlsx_pagination_and_replies_history(self, tmp_path, monkeypatch):
+        """Verify CSV/XLSX batch upload, total_count pagination, and reply_status persistence."""
+        import io
+
+        import openpyxl
+
+        monkeypatch.setenv("ECOMREVIEW_TRACE_DIR", str(tmp_path / "traces"))
+        db_file = tmp_path / "test_upload_file.db"
+        app = create_app(db_path=str(db_file))
+        client = TestClient(app)
+
+        # 1. CSV upload with Vietnamese headers, BOM, PII, and 1 bad row
+        csv_content = (
+            "\ufeffmã đơn hàng,số sao,bình luận,sàn\n"
+            "csv_001,2,Áo mưa bị thấm nước gọi mình 0912345678 nhé,shopee\n"
+            "csv_002,5,Vải dày dặn đẹp lắm shop ơi,tiktok\n"
+            "csv_bad,9,Rating ngoài phạm vi sẽ bị bỏ qua,shopee\n"
+        ).encode("utf-8")
+        r_csv = client.post(
+            "/api/v1/reviews/upload-file",
+            data={"scenario_tag": "file_scen", "analyzer_method": "b1_rule"},
+            files={"file": ("reviews.csv", csv_content, "text/csv")},
+        )
+        assert r_csv.status_code == 200
+        d_csv = r_csv.json()
+        assert d_csv["inserted_count"] == 2
+        assert d_csv["skipped_count"] == 1
+
+        # 2. XLSX upload via openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["review_id", "rating", "text"])
+        ws.append(["xlsx_001", 4, "Giao hàng nhanh đóng gói cẩn thận"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        wb.close()
+        r_xlsx = client.post(
+            "/api/v1/reviews/upload-file",
+            data={"scenario_tag": "file_scen", "analyzer_method": "b1_rule"},
+            files={
+                "file": (
+                    "batch.xlsx",
+                    buf.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert r_xlsx.status_code == 200
+        assert r_xlsx.json()["inserted_count"] == 1
+
+        # 3. Unsupported extension -> 400; > 5MB -> 413
+        r_bad_ext = client.post(
+            "/api/v1/reviews/upload-file",
+            data={"scenario_tag": "file_scen"},
+            files={"file": ("bad.txt", b"hello", "text/plain")},
+        )
+        assert r_bad_ext.status_code == 400
+        r_big = client.post(
+            "/api/v1/reviews/upload-file",
+            data={"scenario_tag": "file_scen"},
+            files={"file": ("big.csv", b"a" * (5 * 1024 * 1024 + 10), "text/csv")},
+        )
+        assert r_big.status_code == 413
+
+        r_bad_xlsx = client.post(
+            "/api/v1/reviews/upload-file",
+            data={"scenario_tag": "file_scen"},
+            files={"file": ("corrupt.xlsx", b"not-a-valid-zip", "application/octet-stream")},
+        )
+        assert r_bad_xlsx.status_code == 400
+
+        # 4. Reply persistence + status transitions + total_count pagination + PII scrubbed
+        r_rep = client.post(
+            "/api/v1/reviews/csv_001/reply-draft?scenario_tag=file_scen&mode=template"
+        )
+        assert r_rep.status_code == 200
+        reply_id = r_rep.json()["reply_id"]
+        assert reply_id > 0
+
+        r_hist = client.get("/api/v1/reviews/csv_001/replies?scenario_tag=file_scen")
+        assert r_hist.status_code == 200
+        assert r_hist.json()["count"] == 1
+
+        # Guardrail violation must block APPROVED/SENT
+        r_bad_status = client.post(
+            f"/api/v1/reviews/replies/{reply_id}/status",
+            json={
+                "status": "APPROVED",
+                "reply_text": "Shop cam kết chống thấm 100% và tặng tiền đổi 5 sao cho bạn nhé.",
+            },
+        )
+        assert r_bad_status.status_code == 400
+
+        # Stored violating draft must ALSO be blocked when reply_text is omitted
+        from ecomreview.db.database import DatabaseManager
+
+        db_direct = DatabaseManager(db_path=str(db_file))
+        bad_id = db_direct.insert_review_reply(
+            review_id="csv_002",
+            scenario_tag="file_scen",
+            reply_text="Shop cam kết chống thấm 100% bảo hành trọn đời ạ.",
+            mode_used="llm",
+            guardrail_passed=False,
+            violations=["G1 (Overclaim)"],
+        )
+        r_bypass = client.post(
+            f"/api/v1/reviews/replies/{bad_id}/status",
+            json={"status": "APPROVED"},
+        )
+        assert r_bypass.status_code == 400
+
+        # Valid DRAFT -> APPROVED -> SENT transition
+        r_app = client.post(
+            f"/api/v1/reviews/replies/{reply_id}/status",
+            json={"status": "APPROVED"},
+        )
+        assert r_app.status_code == 200
+        assert r_app.json()["status"] == "APPROVED"
+
+        r_sent = client.post(
+            f"/api/v1/reviews/replies/{reply_id}/status",
+            json={"status": "SENT"},
+        )
+        assert r_sent.status_code == 200
+        assert r_sent.json()["status"] == "SENT"
+        assert r_sent.json()["sent_at"] is not None
+
+        r_list = client.get("/api/v1/reviews?scenario_tag=file_scen&limit=2&offset=0")
+        assert r_list.status_code == 200
+        list_data = r_list.json()
+        assert list_data["total_count"] == 3
+        assert list_data["count"] == 2
+        by_id = {r["review_id"]: r for r in list_data["reviews"]}
+        assert by_id["csv_001"]["reply_status"] == "SENT"
+        assert by_id["csv_001"]["latest_reply"]["status"] == "SENT"
+        assert by_id["csv_001"]["latest_reply"]["sent_at"] is not None
+        assert "[PHONE]" in by_id["csv_001"]["text_raw"]
 
 
 # CreBy: MenBoyBMN

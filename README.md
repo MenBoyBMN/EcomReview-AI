@@ -2,7 +2,7 @@
 
 **EcomReview AI** là hệ thống Backend API & AI Engine chuyên sâu về phân tích cảm xúc theo khía cạnh (**Aspect-Based Sentiment Analysis — ABSA**) và tự động hóa lập kế hoạch hành động Marketing / Vận hành cho các doanh nghiệp thương mại điện tử (Shopee, TikTok Shop).
 
-Hệ thống được thiết kế theo kiến trúc **Pure Backend Service**, sẵn sàng phục vụ bất kỳ ứng dụng Frontend hiện đại nào (Next.js, React, Vue, Mobile App) thông qua **15 RESTful API Endpoints**, tài liệu tương tác Swagger UI / OpenAPI 3.1 và cơ chế xác thực bảo mật `X-API-Key`.
+Hệ thống được thiết kế theo kiến trúc **Full-Stack (FastAPI Backend + React 18 Frontend)** với **18 RESTful API Endpoints**, tài liệu tương tác Swagger UI / OpenAPI 3.1 và cơ chế xác thực bảo mật `X-API-Key`.
 
 ---
 
@@ -23,10 +23,11 @@ Hệ thống được thiết kế theo kiến trúc **Pure Backend Service**, s
 # 1. Sao chép file cấu hình môi trường
 cp .env.example .env
 
-# 2. Khởi chạy 2 dịch vụ Backend (PostgreSQL 16 + FastAPI Backend)
+# 2. Khởi chạy 3 dịch vụ (PostgreSQL 16 + FastAPI Backend + React Frontend)
 docker compose up --build -d
 ```
-- **Tài liệu Swagger UI tương tác (15 Endpoints):** `http://localhost:8000/docs`
+- **Giao diện Web điều hành:** `http://localhost:5173`
+- **Tài liệu Swagger UI tương tác (18 Endpoints):** `http://localhost:8000/docs`
 - **OpenAPI Schema (JSON):** `http://localhost:8000/openapi.json`
 - **Kiểm tra trạng thái sức khỏe:** `http://localhost:8000/api/v1/health`
 
@@ -36,6 +37,7 @@ docker compose up --build -d
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e .
 
 # 2. Nạp dữ liệu mẫu khởi đầu
 python scripts/seed_demo.py
@@ -55,7 +57,7 @@ Backend hỗ trợ xác thực header qua:
 
 ---
 
-## 📊 Bản Đồ 15 RESTful API Endpoints Cho Frontend Kết Nối
+## 📊 Bản Đồ 18 RESTful API Endpoints Cho Frontend Kết Nối
 
 | STT | Phương thức | Đường dẫn API | Tác dụng & Cơ chế hoạt động |
 | :---: | :---: | :--- | :--- |
@@ -74,6 +76,9 @@ Backend hỗ trợ xác thực header qua:
 | 13 | `POST` | `/api/v1/reviews/{id}/reply-draft` | Trợ lý CSKH tự động soạn câu trả lời an toàn tuân thủ 6 Guardrails G1–G6. |
 | 14 | `GET` | `/api/v1/actions/{id}/impact` | Đo lường hiệu quả trước/sau can thiệp của hành động đã duyệt (`improved`/`worsened`). |
 | 15 | `GET` | `/api/v1/reports/export` | Xuất Báo cáo Điều hành Excel 6 sheet (`.xlsx`) hoặc báo cáo HTML in ra PDF. |
+| 16 | `POST` | `/api/v1/reviews/upload-file` | Tải lên hàng loạt đánh giá từ tệp `.csv` hoặc `.xlsx` (≤ 5 MB, ≤ 1000 dòng). |
+| 17 | `GET` | `/api/v1/reviews/{id}/replies` | Tra cứu lịch sử bản nháp và trạng thái phản hồi CSKH của một đánh giá. |
+| 18 | `POST` | `/api/v1/reviews/replies/{reply_id}/status` | Chuyển trạng thái hoặc cập nhật nội dung nháp CSKH (`DRAFT -> APPROVED -> SENT`) kèm kiểm duyệt G1–G6. |
 
 ---
 

@@ -6,7 +6,6 @@ and negation handling for Vietnamese e-commerce customer feedback.
 """
 
 import re
-from typing import Sequence
 
 from ecomreview.normalize import normalize_social_text
 from ecomreview.schemas import Aspect, AspectOpinion, Polarity, ReviewAnalysis
@@ -241,6 +240,9 @@ POSITIVE_WORDS = {
     "okie",
     "tuyệt",
     "tuyet",
+    "tuyệt vời",
+    "tuyet voi",
+    "emo_pos",
     "rẻ",
     "re",
     "hợp lý",
@@ -277,7 +279,7 @@ NEGATIVE_WORDS = {
     "chán",
     "chan",
     "hỏng",
-    "hong",
+    "emo_neg",
     "lỗi",
     "loi",
     "đắt",
@@ -319,6 +321,20 @@ NEGATION_WORDS = {
 }
 
 
+_CHAT_MESSAGING_FOLLOWERS = {"với", "vs", "shop", "cskh", "nhắn"}
+
+
+def _is_messaging_chat(tokens: list[str], idx: int) -> bool:
+    """Return True when 'chat' refers to customer-shop messaging rather than 'chật' (tight)."""
+    if idx < 0 or idx >= len(tokens) or tokens[idx] != "chat":
+        return False
+    if idx + 1 < len(tokens) and tokens[idx + 1] in _CHAT_MESSAGING_FOLLOWERS:
+        return True
+    if idx > 0 and tokens[idx - 1] in {"nhắn", "tin"}:
+        return True
+    return False
+
+
 class B1RuleAnalyzer:
     """Rule and lexicon-based ABSA analyzer for raincoat e-commerce reviews."""
 
@@ -326,49 +342,72 @@ class B1RuleAnalyzer:
         self.window_size = window_size
         self.enable_norm = enable_norm
 
-    def _determine_sentiment_in_window(
-        self, tokens: list[str], target_idx: int
-    ) -> tuple[Polarity, str]:
-        """Examine context window around target token index to assign polarity."""
-        start = max(0, target_idx - self.window_size)
-        end = min(len(tokens), target_idx + self.window_size + 1)
-        sub_tokens = tokens[start:end]
-        evidence = " ".join(sub_tokens)
-
+    def _score_tokens(
+        self, sub_tokens: list[str], global_offset: int = 0, full_tokens: list[str] | None = None
+    ) -> tuple[int, int]:
+        """Count positive and negative n-gram sentiment hits with negation handling."""
         pos_count = 0
         neg_count = 0
+        ctx_tokens = full_tokens if full_tokens is not None else sub_tokens
 
-        for i, tok in enumerate(sub_tokens):
-            is_pos = tok in POSITIVE_WORDS
-            is_neg = tok in NEGATIVE_WORDS
+        i = 0
+        while i < len(sub_tokens):
+            matched_len = 1
+            is_pos = False
+            is_neg = False
+            for n in (3, 2, 1):
+                if i + n <= len(sub_tokens):
+                    phrase = " ".join(sub_tokens[i : i + n])
+                    if (
+                        n == 1
+                        and phrase == "chat"
+                        and _is_messaging_chat(ctx_tokens, global_offset + i)
+                    ):
+                        continue
+                    in_pos = phrase in POSITIVE_WORDS
+                    in_neg = phrase in NEGATIVE_WORDS
+                    if in_pos or in_neg:
+                        matched_len = n
+                        is_pos = in_pos
+                        is_neg = in_neg
+                        break
 
-            if not is_pos and not is_neg:
-                continue
+            if is_pos or is_neg:
+                # Check if preceded by a negation word (1 or 2 tokens before phrase start)
+                is_negated = any(
+                    i - step >= 0 and sub_tokens[i - step] in NEGATION_WORDS for step in (1, 2)
+                )
+                if is_negated:
+                    if is_pos:
+                        neg_count += 1
+                    elif is_neg:
+                        pos_count += 1
+                else:
+                    if is_pos:
+                        pos_count += 1
+                    elif is_neg:
+                        neg_count += 1
 
-            # Check if preceded by a negation word (1 or 2 tokens before)
-            is_negated = False
-            for step in (1, 2):
-                if i - step >= 0 and sub_tokens[i - step] in NEGATION_WORDS:
-                    is_negated = True
-                    break
+            i += matched_len
 
-            if is_negated:
-                # Invert polarity
-                if is_pos:
-                    neg_count += 1
-                elif is_neg:
-                    pos_count += 1
-            else:
-                if is_pos:
-                    pos_count += 1
-                elif is_neg:
-                    neg_count += 1
+        return pos_count, neg_count
+
+    def _determine_sentiment_in_window(
+        self, tokens: list[str], target_idx: int, kw_len: int = 1
+    ) -> Polarity:
+        """Examine context window around target token span to assign polarity."""
+        start = max(0, target_idx - self.window_size)
+        end = min(len(tokens), target_idx + kw_len + self.window_size)
+        sub_tokens = tokens[start:end]
+        pos_count, neg_count = self._score_tokens(
+            sub_tokens, global_offset=start, full_tokens=tokens
+        )
 
         if pos_count > neg_count:
-            return Polarity.POS, evidence
+            return Polarity.POS
         if neg_count > pos_count:
-            return Polarity.NEG, evidence
-        return Polarity.NEU, evidence
+            return Polarity.NEG
+        return Polarity.NEU
 
     def analyze_review(self, text: str) -> ReviewAnalysis:
         """Analyze a single review text and return a ReviewAnalysis model."""
@@ -381,7 +420,8 @@ class B1RuleAnalyzer:
 
         norm_text = normalize_social_text(text, enable=self.enable_norm)
         tokens = re.findall(r"\w+", norm_text.lower())
-        raw_tokens = re.findall(r"\w+", text)
+        raw_matches = list(re.finditer(r"\w+", text))
+        text_lower = text.lower()
 
         opinions: list[AspectOpinion] = []
         detected_aspects: set[Aspect] = set()
@@ -395,15 +435,28 @@ class B1RuleAnalyzer:
                 # Search for multi-token or single-token keyword match
                 for i in range(len(tokens) - kw_len + 1):
                     if tokens[i : i + kw_len] == kw_tokens:
+                        if kw_len == 1 and kw == "chat" and _is_messaging_chat(tokens, i):
+                            continue
                         if aspect not in detected_aspects:
-                            pol, _ = self._determine_sentiment_in_window(tokens, i)
+                            pol = self._determine_sentiment_in_window(tokens, i, kw_len=kw_len)
 
-                            # Extract verbatim slice from raw text if possible for evidence
-                            raw_start = max(0, i - 2)
-                            raw_end = min(len(raw_tokens), i + kw_len + 3)
-                            verbatim_ev = " ".join(raw_tokens[raw_start:raw_end])
-                            if not verbatim_ev or verbatim_ev.lower() not in text.lower():
-                                verbatim_ev = " ".join(kw_tokens)
+                            # Extract verbatim slice from raw text preserving punctuation
+                            verbatim_ev = ""
+                            kw_lower = kw.lower()
+                            if kw_lower in text_lower:
+                                k_idx = text_lower.find(kw_lower)
+                                span_start = max(0, k_idx - 12)
+                                span_end = min(len(text), k_idx + len(kw) + 18)
+                                verbatim_ev = text[span_start:span_end].strip()
+                            elif raw_matches:
+                                approx_idx = int(i * len(raw_matches) / max(1, len(tokens)))
+                                raw_start = min(len(raw_matches) - 1, max(0, approx_idx - 2))
+                                raw_end = min(len(raw_matches) - 1, approx_idx + kw_len + 2)
+                                verbatim_ev = text[
+                                    raw_matches[raw_start].start() : raw_matches[raw_end].end()
+                                ]
+                            if not verbatim_ev or verbatim_ev.lower() not in text_lower:
+                                verbatim_ev = text[: min(40, len(text))].strip()
 
                             opinions.append(
                                 AspectOpinion(
@@ -415,24 +468,27 @@ class B1RuleAnalyzer:
                             detected_aspects.add(aspect)
                         break
 
+        full_pos, full_neg = self._score_tokens(tokens)
+
         # Fallback to GENERAL aspect if no domain aspect matched
         if not opinions:
-            # Overall polarity check on full text
-            pos_total = sum(1 for tok in tokens if tok in POSITIVE_WORDS)
-            neg_total = sum(1 for tok in tokens if tok in NEGATIVE_WORDS)
-            if pos_total > neg_total:
+            if full_pos > full_neg:
                 pol = Polarity.POS
-            elif neg_total > pos_total:
+            elif full_neg > full_pos:
                 pol = Polarity.NEG
             else:
                 pol = Polarity.NEU
 
-            ev_tokens = raw_tokens[:8] if raw_tokens else [text[:20]]
+            if raw_matches:
+                end_m = raw_matches[min(7, len(raw_matches) - 1)]
+                ev_slice = text[raw_matches[0].start() : end_m.end()]
+            else:
+                ev_slice = text[: min(30, len(text))]
             opinions.append(
                 AspectOpinion(
                     aspect=Aspect.GENERAL,
                     polarity=pol,
-                    evidence=" ".join(ev_tokens),
+                    evidence=ev_slice,
                 )
             )
 
@@ -445,27 +501,20 @@ class B1RuleAnalyzer:
         elif neg_ops > pos_ops:
             overall = Polarity.NEG
         else:
-            # Tie breaker: check raw text positive vs negative signals
-            pos_t = sum(1 for tok in tokens if tok in POSITIVE_WORDS)
-            neg_t = sum(1 for tok in tokens if tok in NEGATIVE_WORDS)
-            if pos_t > neg_t:
+            if full_pos > full_neg:
                 overall = Polarity.POS
-            elif neg_t > pos_t:
+            elif full_neg > full_pos:
                 overall = Polarity.NEG
             else:
                 overall = Polarity.POS  # E-commerce default bias
 
-        informative = len(tokens) >= 3 and not (len(tokens) <= 2 and "ok" in tokens)
+        informative = len(tokens) >= 3
 
         return ReviewAnalysis(
             overall_sentiment=overall,
             opinions=opinions,
             informative=informative,
         )
-
-    def analyze_batch(self, texts: Sequence[str]) -> list[ReviewAnalysis]:
-        """Analyze a list of review texts sequentially."""
-        return [self.analyze_review(t) for t in texts]
 
 
 # CreBy: MenBoyBMN

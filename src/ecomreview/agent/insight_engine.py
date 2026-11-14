@@ -10,6 +10,7 @@ Implements Week 5 Task 5.4:
 """
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -19,18 +20,25 @@ from ecomreview.agent.evidence_selector import (
     select_representative_evidence,
 )
 from ecomreview.agent.tools_aggregator import (
+    _confidence_tier,
     get_aspect_sentiment_stats,
     get_hidden_complaints,
-    get_platform_gap_stats,
+    get_platform_comparison,
     wilson_ci_pct,
 )
 from ecomreview.db.database import DatabaseManager
+from ecomreview.llm_provider import get_default_llm_client, is_agent_llm_enabled
+from ecomreview.schemas import InsightStatement
+
+logger = logging.getLogger(__name__)
 
 NUMBER_RE = re.compile(r"\b\d+(?:[.,]\d+)?%?\b")
 BENIGN_PATTERNS = [
     re.compile(r"\b[1-5]\s*(?:-\s*[1-5]\s*)?sao\b", re.IGNORECASE),
-    re.compile(r"\b95%\s*(?:ci|wilson)?\b", re.IGNORECASE),
+    re.compile(r"\b95%(?:\s*(?:ci|wilson)\b)?", re.IGNORECASE),
+    re.compile(r"\b(?:ci|wilson)\s*95%\b", re.IGNORECASE),
     re.compile(r"\bkhoảng\s*tin\s*cậy\s*95%\b", re.IGNORECASE),
+    re.compile(r"\b1\s*[-/]\s*1\b", re.IGNORECASE),
     re.compile(r"\b(?:shp|tik|tts|syn)_\d+\b", re.IGNORECASE),
 ]
 
@@ -47,6 +55,21 @@ ASPECT_VN_LABELS: dict[str, str] = {
 }
 
 
+def _parse_numeric_token(tok: str) -> float | None:
+    """Parse a numeric token supporting both decimal commas and grouped thousands."""
+    raw = tok.rstrip("%")
+    if re.fullmatch(r"\d{1,3}(?:,\d{3})+", raw):
+        raw = raw.replace(",", "")
+    elif re.fullmatch(r"\d{1,3}(?:\.\d{3})+", raw):
+        raw = raw.replace(".", "")
+    else:
+        raw = raw.replace(",", ".")
+    try:
+        return round(float(raw), 1)
+    except ValueError:
+        return None
+
+
 def verify_numbers_in_statement(statement: str, allowed_numbers: dict[str, Any]) -> bool:
     """Verify that every statistical number in `statement` exists in `allowed_numbers`."""
     clean_statement = statement
@@ -55,19 +78,17 @@ def verify_numbers_in_statement(statement: str, allowed_numbers: dict[str, Any])
 
     allowed_set: set[float] = set()
     for val in allowed_numbers.values():
-        if isinstance(val, (int, float)) and not isinstance(val, bool):
-            allowed_set.add(round(float(val), 1))
-            allowed_set.add(float(round(val)))
+        items = val if isinstance(val, (list, tuple)) else [val]
+        for item in items:
+            if isinstance(item, (int, float)) and not isinstance(item, bool):
+                allowed_set.add(round(float(item), 1))
+                allowed_set.add(float(round(item)))
 
     extracted_tokens = NUMBER_RE.findall(clean_statement)
     for tok in extracted_tokens:
-        tok_clean = tok.replace("%", "").replace(",", ".")
-        try:
-            val = round(float(tok_clean), 1)
-            if val not in allowed_set:
-                return False
-        except ValueError:
-            continue
+        val = _parse_numeric_token(tok)
+        if val is not None and val not in allowed_set:
+            return False
     return True
 
 
@@ -112,11 +133,62 @@ def format_deterministic_insight(kind: str, aspect: str | None, numbers: dict[st
 class InsightEngine:
     """Generates and persists numerically verified insights for a scenario."""
 
-    def __init__(self, db: DatabaseManager | None = None):
+    def __init__(
+        self,
+        db: DatabaseManager | None = None,
+        llm_client: Any | None = None,
+        use_llm: bool | None = None,
+    ):
         self.db = db or DatabaseManager()
+        self._llm_client = llm_client
+        self.use_llm = is_agent_llm_enabled() if use_llm is None else bool(use_llm)
+
+    def _compose_statement(
+        self, kind: str, aspect: str | None, numbers: dict[str, Any]
+    ) -> tuple[str, str]:
+        """Compose insight statement via LLM (with numeric check) or deterministic template."""
+        fallback_stmt = format_deterministic_insight(kind, aspect, numbers)
+        if not self.use_llm:
+            return fallback_stmt, "template"
+
+        client = self._llm_client or get_default_llm_client()
+        asp_vn = ASPECT_VN_LABELS.get(aspect or "GENERAL", aspect or "Tổng thể")
+        prompt = (
+            f"Hãy viết lại ngắn gọn, tự nhiên bằng tiếng Việt (40-400 ký tự) nhận định "
+            f"kinh doanh cho loại insight `{kind}` ở khía cạnh `{asp_vn}`.\n"
+            f"BẮT BUỘC chỉ sử dụng đúng các con số sau (không làm tròn khác, không thêm số mới): "
+            f"{json.dumps(numbers, ensure_ascii=False)}\n"
+            f"Câu tham chiếu chuẩn: {fallback_stmt}"
+        )
+        system_inst = (
+            "Bạn là chuyên gia phân tích dữ liệu thương mại điện tử SME. "
+            "Chỉ trả về JSON khớp schema InsightStatement và giữ nguyên chính xác mọi con số."
+        )
+        for attempt in range(2):
+            try:
+                res: InsightStatement = client.generate_structured(
+                    prompt=prompt,
+                    schema_cls=InsightStatement,
+                    system_instruction=system_inst,
+                )
+                cand = res.statement.strip()
+                if 40 <= len(cand) <= 400 and verify_numbers_in_statement(cand, numbers):
+                    return cand, "llm"
+                prompt += (
+                    f"\nLần thử {attempt + 1} bị từ chối vì số liệu không khớp "
+                    "hoặc vượt độ dài 40-400 ký tự."
+                )
+            except Exception as exc:
+                logger.warning("Insight LLM generation failed: %s. Falling back to template.", exc)
+                break
+        return fallback_stmt, "template"
 
     def generate_insights(
-        self, scenario_tag: str = "real_shop", min_n: int = 5, persist: bool = True
+        self,
+        scenario_tag: str = "real_shop",
+        min_n: int = 5,
+        persist: bool = True,
+        run_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Detect statistical patterns, verify numbers, attach evidence, and save to DB."""
         stats = get_aspect_sentiment_stats(scenario_tag=scenario_tag, min_n=min_n, db=self.db)
@@ -143,8 +215,7 @@ class InsightEngine:
                 "ci_low": s["ci_low"],
                 "ci_high": s["ci_high"],
             }
-            stmt = format_deterministic_insight("TOP_PAIN", asp, numbers)
-            assert verify_numbers_in_statement(stmt, numbers)
+            stmt, stmt_source = self._compose_statement("TOP_PAIN", asp, numbers)
             ev_ids = select_representative_evidence(
                 scenario_tag, aspect=asp, polarity="negative", db=self.db
             )
@@ -154,6 +225,7 @@ class InsightEngine:
                     "kind": "TOP_PAIN",
                     "aspect": asp,
                     "statement": stmt,
+                    "statement_source": stmt_source,
                     "numbers": numbers,
                     "evidence_ids": ev_ids,
                     "confidence": s["confidence"],
@@ -180,8 +252,7 @@ class InsightEngine:
                 "pos_ci_low": s["pos_ci_low"],
                 "pos_ci_high": s["pos_ci_high"],
             }
-            stmt = format_deterministic_insight("STRENGTH", asp, numbers)
-            assert verify_numbers_in_statement(stmt, numbers)
+            stmt, stmt_source = self._compose_statement("STRENGTH", asp, numbers)
             ev_ids = select_representative_evidence(
                 scenario_tag, aspect=asp, polarity="positive", db=self.db
             )
@@ -191,6 +262,7 @@ class InsightEngine:
                     "kind": "STRENGTH",
                     "aspect": asp,
                     "statement": stmt,
+                    "statement_source": stmt_source,
                     "numbers": numbers,
                     "evidence_ids": ev_ids,
                     "confidence": s["confidence"],
@@ -212,7 +284,8 @@ class InsightEngine:
             for h in hidden:
                 aspect_counts[h["aspect"]] = aspect_counts.get(h["aspect"], 0) + 1
             dom_asp = max(aspect_counts, key=aspect_counts.get)  # type: ignore[arg-type]
-            h_cnt = len(hidden)
+            distinct_hidden_rids = list(dict.fromkeys(h["review_id"] for h in hidden))
+            h_cnt = len(distinct_hidden_rids)
             h_pct = round((h_cnt / high_rating_total) * 100.0, 1)
             ci_l, ci_h = wilson_ci_pct(h_cnt, high_rating_total)
             numbers = {
@@ -225,9 +298,9 @@ class InsightEngine:
                 "neg_count": h_cnt,
                 "neg_pct": h_pct,
             }
-            stmt = format_deterministic_insight("HIDDEN_COMPLAINT", dom_asp, numbers)
-            assert verify_numbers_in_statement(stmt, numbers)
-            ev_ids = list(dict.fromkeys(h["review_id"] for h in hidden))[:4]
+            stmt, stmt_source = self._compose_statement("HIDDEN_COMPLAINT", dom_asp, numbers)
+            dom_hidden_rids = [h["review_id"] for h in hidden if h.get("aspect") == dom_asp]
+            ev_ids = list(dict.fromkeys(dom_hidden_rids))[:4]
             if len(ev_ids) < 2:
                 ev_ids = select_representative_evidence(
                     scenario_tag, aspect=dom_asp, polarity="negative", db=self.db
@@ -238,14 +311,19 @@ class InsightEngine:
                     "kind": "HIDDEN_COMPLAINT",
                     "aspect": dom_asp,
                     "statement": stmt,
+                    "statement_source": stmt_source,
                     "numbers": numbers,
                     "evidence_ids": ev_ids,
-                    "confidence": "medium" if high_rating_total >= 15 else "low",
+                    "confidence": _confidence_tier(high_rating_total),
                 }
             )
 
         # 4. PLATFORM_GAP (Shopee vs TikTok Shop difference >= 20%)
-        gaps = get_platform_gap_stats(scenario_tag=scenario_tag, min_n=2, db=self.db)
+        gaps = [
+            g
+            for g in get_platform_comparison(scenario_tag=scenario_tag, min_n=2, db=self.db)
+            if g["gap_pct"] >= 20.0
+        ]
         if gaps:
             g = gaps[0]
             asp = g["aspect"]
@@ -258,8 +336,7 @@ class InsightEngine:
                 "total": g["shopee_total"] + g["tiktok_total"],
                 "neg_pct": max(g["shopee_neg_pct"], g["tiktok_neg_pct"]),
             }
-            stmt = format_deterministic_insight("PLATFORM_GAP", asp, numbers)
-            assert verify_numbers_in_statement(stmt, numbers)
+            stmt, stmt_source = self._compose_statement("PLATFORM_GAP", asp, numbers)
             ev_ids = select_representative_evidence(
                 scenario_tag, aspect=asp, polarity="negative", db=self.db
             )
@@ -269,6 +346,7 @@ class InsightEngine:
                     "kind": "PLATFORM_GAP",
                     "aspect": asp,
                     "statement": stmt,
+                    "statement_source": stmt_source,
                     "numbers": numbers,
                     "evidence_ids": ev_ids,
                     "confidence": g["confidence"],
@@ -285,8 +363,7 @@ class InsightEngine:
                 "neg_count": emerging["issue_count"],
                 "neg_pct": emerging["issue_pct"],
             }
-            stmt = format_deterministic_insight("EMERGING_ISSUE", "GENERAL", numbers)
-            assert verify_numbers_in_statement(stmt, numbers)
+            stmt, stmt_source = self._compose_statement("EMERGING_ISSUE", "GENERAL", numbers)
             ev_ids = emerging["evidence_ids"]
             if len(ev_ids) < 2:
                 ev_ids = select_representative_evidence(scenario_tag, db=self.db)
@@ -296,23 +373,29 @@ class InsightEngine:
                     "kind": "EMERGING_ISSUE",
                     "aspect": "GENERAL",
                     "statement": stmt,
+                    "statement_source": stmt_source,
                     "numbers": numbers,
                     "evidence_ids": ev_ids,
-                    "confidence": "medium" if emerging["total"] >= 15 else "low",
+                    "confidence": _confidence_tier(emerging["total"]),
                 }
             )
 
         if persist:
             now_str = datetime.now(timezone.utc).isoformat()
+            effective_run_id = run_id or f"ins_{int(datetime.now(timezone.utc).timestamp())}"
             with self.db.get_connection(read_only=False) as conn:
-                conn.execute("DELETE FROM insights WHERE scenario_tag = ?", (scenario_tag,))
+                conn.execute(
+                    "UPDATE insights SET is_archived = 1 "
+                    "WHERE scenario_tag = ? AND COALESCE(is_archived, 0) = 0",
+                    (scenario_tag,),
+                )
                 for ins in insights:
                     cur = conn.execute(
                         """
                         INSERT INTO insights (
                             scenario_tag, kind, aspect, statement,
-                            numbers, evidence_ids, confidence, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            numbers, evidence_ids, confidence, run_id, is_archived, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                         RETURNING id
                         """,
                         (
@@ -323,47 +406,23 @@ class InsightEngine:
                             json.dumps(ins["numbers"], ensure_ascii=False),
                             json.dumps(ins["evidence_ids"], ensure_ascii=False),
                             ins["confidence"],
+                            effective_run_id,
                             now_str,
                         ),
                     )
                     row = cur.fetchone()
                     if row is not None:
-                        ins["id"] = int(row["id"] if isinstance(row, dict) else row[0])
+                        assigned_id = int(row["id"] if isinstance(row, dict) else row[0])
                     else:
-                        ins["id"] = int(cur.lastrowid or 0)
+                        assigned_id = int(cur.lastrowid or 0)
+                    ins["id"] = assigned_id
+                    ins["insight_id"] = assigned_id
         else:
             for idx, ins in enumerate(insights, start=1):
                 ins["id"] = idx
+                ins["insight_id"] = idx
 
         return insights
-
-    def load_insights(self, scenario_tag: str = "real_shop") -> list[dict[str, Any]]:
-        """Load persisted insights for a scenario (or generate if empty)."""
-        with self.db.get_connection(read_only=True) as conn:
-            rows = conn.execute(
-                "SELECT * FROM insights WHERE scenario_tag = ? ORDER BY id ASC",
-                (scenario_tag,),
-            ).fetchall()
-
-        if not rows:
-            return self.generate_insights(scenario_tag=scenario_tag, persist=True)
-
-        result: list[dict[str, Any]] = []
-        for r in rows:
-            result.append(
-                {
-                    "id": int(r["id"]),
-                    "scenario_tag": str(r["scenario_tag"]),
-                    "kind": str(r["kind"]),
-                    "aspect": str(r["aspect"]) if r["aspect"] else "GENERAL",
-                    "statement": str(r["statement"]),
-                    "numbers": json.loads(r["numbers"]),
-                    "evidence_ids": json.loads(r["evidence_ids"]),
-                    "confidence": str(r["confidence"]),
-                    "created_at": str(r["created_at"]),
-                }
-            )
-        return result
 
 
 # CreBy: MenBoyBMN

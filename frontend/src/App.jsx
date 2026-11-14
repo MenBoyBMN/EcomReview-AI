@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { api } from './api/client';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
@@ -41,7 +41,9 @@ export default function App() {
   const [insights, setInsights] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [actions, setActions] = useState([]);
+  const [includeArchivedActions, setIncludeArchivedActions] = useState(false);
   const [loadingOverview, setLoadingOverview] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -53,10 +55,22 @@ export default function App() {
   });
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  const reqIdRef = useRef(0);
+  const toastTimerRef = useRef(null);
 
   const handleSelectTab = useCallback((tabId) => {
     setActiveTab(tabId);
-    window.history.replaceState(null, '', `#${tabId}`);
+    const params = new URLSearchParams(window.location.search);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    window.history.replaceState(null, '', `${query}#${tabId}`);
+  }, []);
+
+  const handleScenarioChange = useCallback((nextScenario) => {
+    setScenarioTag(nextScenario);
+    const params = new URLSearchParams(window.location.search);
+    params.set('scenario', nextScenario);
+    const hash = window.location.hash || '';
+    window.history.replaceState(null, '', `?${params.toString()}${hash}`);
   }, []);
 
   useEffect(() => {
@@ -79,38 +93,51 @@ export default function App() {
   }, [darkMode]);
 
   const showToast = useCallback((message, type = 'info') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToast({ message, type });
-    setTimeout(() => {
-      setToast((prev) => (prev?.message === message ? null : prev));
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
     }, 4000);
   }, []);
 
   const loadScenarioData = useCallback(async () => {
+    const curReqId = ++reqIdRef.current;
     setLoadingOverview(true);
+    setLoadError(null);
     try {
       const [healthRes, overviewRes, insightsRes, alertsRes, actionsRes] = await Promise.all([
         api.getHealth().catch(() => null),
         api.getOverviewStats(scenarioTag, 3),
         api.getInsights(scenarioTag),
-        api.getAlerts(scenarioTag, 'month', 3, 8.0).catch(() => ({ alerts: [] })),
-        api.getActions(scenarioTag),
+        api.getAlerts(scenarioTag, 'month', 3, 8.0).catch((err) => {
+          showToast(err.message || 'Không thể tải cảnh báo đột biến', 'error');
+          return { alerts: [] };
+        }),
+        api.getActions(scenarioTag, null, '', includeArchivedActions),
       ]);
 
+      if (curReqId !== reqIdRef.current) return;
       if (healthRes) setHealth(healthRes);
       setOverview(overviewRes);
       setInsights(insightsRes.insights || []);
       setAlerts(alertsRes.alerts || []);
       setActions(actionsRes.actions || []);
     } catch (err) {
-      showToast(
+      if (curReqId !== reqIdRef.current) return;
+      const msg =
         err.message ||
-          'Không thể kết nối tới máy chủ Backend (Hãy đảm bảo uvicorn đang chạy ở cổng 8000)',
-        'error'
-      );
+        'Không thể kết nối tới máy chủ Backend (Hãy đảm bảo uvicorn đang chạy ở cổng 8000)';
+      setLoadError(msg);
+      showToast(msg, 'error');
     } finally {
-      setLoadingOverview(false);
+      if (curReqId === reqIdRef.current) {
+        setLoadingOverview(false);
+      }
     }
-  }, [scenarioTag, showToast]);
+  }, [scenarioTag, includeArchivedActions, showToast]);
 
   useEffect(() => {
     loadScenarioData();
@@ -176,7 +203,7 @@ export default function App() {
         <Navbar
           pageTitle={currentNavItem.pageTitle}
           scenarioTag={scenarioTag}
-          onScenarioChange={setScenarioTag}
+          onScenarioChange={handleScenarioChange}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
           onRefreshAll={() => {
@@ -191,6 +218,7 @@ export default function App() {
             setReviewer(val);
             localStorage.setItem('ecomreview_reviewer', val);
           }}
+          showToast={showToast}
         />
 
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5">
@@ -199,6 +227,8 @@ export default function App() {
               overview={overview}
               scenarioTag={scenarioTag}
               loadingOverview={loadingOverview}
+              loadError={loadError}
+              onRetry={loadScenarioData}
               darkMode={darkMode}
               onNavigateReviewsWithAspect={handleNavigateReviewsWithAspect}
             />
@@ -219,6 +249,8 @@ export default function App() {
             <ActionsTab
               scenarioTag={scenarioTag}
               actions={actions}
+              includeArchived={includeArchivedActions}
+              onToggleIncludeArchived={setIncludeArchivedActions}
               onRefreshActions={loadScenarioData}
               onOpenEvidence={handleOpenEvidence}
               showToast={showToast}

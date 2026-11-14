@@ -92,6 +92,73 @@ class TestDatabaseBackend:
             assert fb is not None
             assert fb["decided_by"] == "admin_user"
 
+    def test_action_archiving_preserves_feedback_and_review_replies(self, tmp_path):
+        """Re-running graph archives previous actions instead of deleting action_feedback."""
+        from ecomreview.agent.graph_runner import EcomReviewGraphRunner
+
+        db_file = tmp_path / "test_archive.db"
+        db = DatabaseManager(db_path=str(db_file), db_backend="sqlite")
+
+        for i in range(6):
+            pol = "negative" if i < 4 else "positive"
+            db.upsert_review_and_opinions(
+                review_id=f"arc_{i:03d}",
+                platform="shopee",
+                shop="shop_a",
+                product="ao_mua",
+                rating=2 if i < 4 else 5,
+                text_raw=f"Đánh giá {i} về khả năng chống thấm nước đường may áo mưa",
+                text_norm=f"đánh giá {i} về khả năng chống thấm nước đường may áo mưa",
+                source="review",
+                scenario_tag="arc_scen",
+                overall_sentiment=pol,
+                informative=True,
+                opinions=[{"aspect": "WATERPROOF", "polarity": pol, "evidence": "chống thấm nước"}],
+            )
+
+        runner = EcomReviewGraphRunner(db=db, trace_dir=tmp_path / "traces", use_llm=False)
+        runner.run_scenario(scenario_tag="arc_scen", min_n=5, max_actions=3)
+
+        with db.get_connection(read_only=True) as conn:
+            act1 = conn.execute(
+                "SELECT id FROM actions WHERE scenario_tag = 'arc_scen' AND is_archived = 0"
+            ).fetchone()
+        assert act1 is not None
+        first_id = int(act1["id"])
+        db.record_action_decision(action_id=first_id, decision="APPROVED", decided_by="owner")
+
+        # Run again: old action must be archived, feedback must stay intact
+        runner.run_scenario(scenario_tag="arc_scen", min_n=5, max_actions=3)
+        with db.get_connection(read_only=True) as conn:
+            old_row = conn.execute(
+                "SELECT status, is_archived FROM actions WHERE id = ?", (first_id,)
+            ).fetchone()
+            fb_row = conn.execute(
+                "SELECT decision FROM action_feedback WHERE action_id = ?", (first_id,)
+            ).fetchone()
+            active_rows = conn.execute(
+                "SELECT id FROM actions WHERE scenario_tag = 'arc_scen' AND is_archived = 0"
+            ).fetchall()
+        assert old_row is not None and old_row["is_archived"] == 1
+        assert old_row["status"] == "APPROVED"
+        assert fb_row is not None and fb_row["decision"] == "APPROVED"
+        assert all(int(r["id"]) != first_id for r in active_rows)
+
+        # Verify review_replies insert and list
+        rep_id = db.insert_review_reply(
+            review_id="arc_000",
+            scenario_tag="arc_scen",
+            reply_text="Dạ shop xin lỗi và hỗ trợ đổi mới 1-1 qua chat sàn ạ.",
+            mode_used="template",
+            guardrail_passed=True,
+            violations=[],
+            created_by="cskh_staff",
+        )
+        assert rep_id > 0
+        replies = db.list_review_replies("arc_000", "arc_scen")
+        assert len(replies) == 1
+        assert replies[0]["created_by"] == "cskh_staff"
+
     def test_postgres_integration_when_url_provided(self):
         """Execute integration tests on PostgreSQL 16 if ECOMREVIEW_TEST_PG_URL is set."""
         pg_url = os.getenv("ECOMREVIEW_TEST_PG_URL")

@@ -90,7 +90,7 @@ class TestSchemas:
         valid_proposal = ActionProposal(
             action_id="act_001",
             action_type=ActionType.LISTING_UPDATE,
-            is_marketing=True,
+            is_marketing=False,  # Intentionally pass False to test sync
             title="Cập nhật bảng kích thước áo mưa",
             description="Bổ sung hướng dẫn chọn size cho người cao trên 1m75",
             insight_ids=["ins_001"],
@@ -98,6 +98,20 @@ class TestSchemas:
             target_metric="Tỷ lệ đánh giá 5 sao cho khía cạnh FIT_SIZE",
         )
         assert len(valid_proposal.evidence_review_ids) == 2
+        # sync_legacy_and_extended_fields should auto-sync is_marketing=True for LISTING_UPDATE
+        assert valid_proposal.is_marketing is True
+
+        ops_proposal = ActionProposal(
+            action_id="act_002",
+            action_type=ActionType.PRODUCT_FIX,
+            is_marketing=True,  # Intentionally pass True to test sync
+            title="Gia cố đường ép nhiệt",
+            description="Khắc phục thấm nước",
+            insight_ids=["ins_002"],
+            evidence_review_ids=["rev_001", "rev_002"],
+            target_metric="Tỷ lệ phàn nàn",
+        )
+        assert ops_proposal.is_marketing is False
 
 
 class TestSecurity:
@@ -107,18 +121,28 @@ class TestSecurity:
         """Verify that phone numbers, spaced/dotted numbers, emails, and links are masked."""
         raw = (
             "Liên hệ mình qua 0987654321 hoặc +84 912 345 678 hay 0912.345.678 "
-            "hoặc email test@gmail.com hoặc ghé zalo.me/0912345678 và https://shopee.vn/aomua nhé"
+            "hoặc email test+order123@gmail.com hoặc ghé zalo.me/0912345678 "
+            "và <https://shopee.vn/aomua> nhé"
         )
         scrubbed = scrub_pii(raw)
         assert "0987654321" not in scrubbed
         assert "0912 345 678" not in scrubbed
         assert "0912.345.678" not in scrubbed
-        assert "test@gmail.com" not in scrubbed
+        assert "test+order123@gmail.com" not in scrubbed
         assert "zalo.me" not in scrubbed
         assert "https://shopee.vn" not in scrubbed
         assert "[PHONE]" in scrubbed
         assert "[EMAIL]" in scrubbed
         assert "[LINK]" in scrubbed
+        assert "<[LINK]>" in scrubbed
+
+    def test_sanitize_for_llm_scrubs_before_truncating(self):
+        """Ensure PII at end of long input is scrubbed properly even near max_chars."""
+        prefix = "A" * 980
+        raw = f"{prefix} Liên hệ 0987654321 gấp"
+        sanitized = sanitize_for_llm(raw, max_chars=1000)
+        assert "0987654321" not in sanitized
+        assert "[PHONE]" in sanitized
 
     def test_sanitize_for_llm_escapes_xml(self):
         """Verify that XML/HTML injection tags are escaped."""

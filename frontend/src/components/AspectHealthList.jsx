@@ -43,8 +43,10 @@ export default function AspectHealthList({ aspectStats = [], onSelectAspect }) {
           const neuPct = Math.max(0, Number((100 - negPct - posPct).toFixed(1)));
           const meta = ASPECT_META[item.aspect] || {};
           const confLabel = CONFIDENCE_LABELS[item.confidence] || item.confidence;
+          const posLow = item.pos_ci_low ?? item.pos_wilson_ci_low ?? 0;
+          const posHigh = item.pos_ci_high ?? item.pos_wilson_ci_high ?? 0;
 
-          const tooltipText = `Tổng ${item.total} ý kiến (${confLabel}). Phàn nàn: ${item.neg_count} bài (Khoảng tin cậy 95%: ${item.wilson_ci_low}% – ${item.wilson_ci_high}%). Khen ngợi: ${item.pos_count} bài (${item.pos_wilson_ci_low}% – ${item.pos_wilson_ci_high}%).`;
+          const tooltipText = `Tổng ${item.total} ý kiến (${confLabel}). Phàn nàn: ${item.neg_count} bài (Khoảng tin cậy 95%: ${item.wilson_ci_low}% – ${item.wilson_ci_high}%). Khen ngợi: ${item.pos_count} bài (${posLow}% – ${posHigh}%).`;
 
           return (
             <div

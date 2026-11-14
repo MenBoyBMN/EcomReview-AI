@@ -69,11 +69,15 @@ DEFAULT_DEADLINE_KEYWORDS = [
 ]
 
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
 class HybridCritic:
     """Deterministic R1-R7 Rule Engine + Quality Rubric Evaluator for ActionProposals."""
 
     def __init__(self, playbook_path: str | Path = "knowledge/playbook_aomua.yaml"):
-        self.playbook_path = Path(playbook_path)
+        path_obj = Path(playbook_path)
+        self.playbook_path = path_obj if path_obj.is_absolute() else (_PROJECT_ROOT / path_obj)
         guardrails: dict[str, Any] = {}
         if self.playbook_path.exists():
             data = yaml.safe_load(self.playbook_path.read_text(encoding="utf-8")) or {}
@@ -82,12 +86,14 @@ class HybridCritic:
         self.overclaim_keywords: list[str] = [
             k.lower() for k in guardrails.get("overclaim_keywords", DEFAULT_OVERCLAIM_KEYWORDS)
         ]
-        self.prohibited_policy_keywords: list[str] = [
-            k.lower()
-            for k in guardrails.get(
-                "prohibited_policy_keywords", DEFAULT_PROHIBITED_POLICY_KEYWORDS
-            )
-        ]
+        merged_prohibited = list(DEFAULT_PROHIBITED_POLICY_KEYWORDS)
+        existing_lower = {k.lower() for k in merged_prohibited}
+        for kw in guardrails.get("prohibited_policy_keywords", []):
+            kw_s = str(kw)
+            if kw_s.lower() not in existing_lower:
+                merged_prohibited.append(kw_s)
+                existing_lower.add(kw_s.lower())
+        self.prohibited_policy_keywords: list[str] = [k.lower() for k in merged_prohibited]
         self.deadline_keywords: list[str] = [
             k.lower() for k in guardrails.get("deadline_keywords", DEFAULT_DEADLINE_KEYWORDS)
         ]
@@ -104,7 +110,7 @@ class HybridCritic:
         all_known_review_ids: set[str] = set(valid_review_ids or set())
 
         for idx, ins in enumerate(insights, start=1):
-            iid = str(ins.get("insight_id", idx))
+            iid = str(ins.get("insight_id") or ins.get("id") or idx)
             insight_map[iid] = ins
             for eid in ins.get("evidence_ids") or []:
                 all_known_review_ids.add(str(eid))
@@ -145,15 +151,17 @@ class HybridCritic:
                     )
                 )
 
-            ev_ids = [str(e) for e in prop.evidence_review_ids if str(e).strip()]
+            ev_ids = list(
+                dict.fromkeys(str(e).strip() for e in prop.evidence_review_ids if str(e).strip())
+            )
             if len(ev_ids) < 2:
                 violations.append(
                     CriticViolation(
                         rule_id="R1",
                         action_id=aid,
                         message=(
-                            f"Vi phạm R1 (Evidence Existence): Cần >= 2 evidence_review_ids, "
-                            f"hiện chỉ có {len(ev_ids)}."
+                            f"Vi phạm R1 (Evidence Existence): Cần >= 2 mã evidence_review_ids "
+                            f"khác nhau, hiện chỉ có {len(ev_ids)}."
                         ),
                         auto_fixable=True,
                     )
@@ -321,9 +329,12 @@ class HybridCritic:
         if not insights:
             return proposals
 
-        insight_map = {str(ins.get("insight_id", i + 1)): ins for i, ins in enumerate(insights)}
+        insight_map = {
+            str(ins.get("insight_id") or ins.get("id") or i + 1): ins
+            for i, ins in enumerate(insights)
+        }
         default_ins = insights[0]
-        default_iid = default_ins.get("insight_id", 1)
+        default_iid = default_ins.get("insight_id") or default_ins.get("id") or 1
         all_valid_revs = list(valid_review_ids or [])
         for ins in insights:
             for eid in ins.get("evidence_ids") or []:
@@ -347,22 +358,33 @@ class HybridCritic:
 
             ref_ins = insight_map[str(valid_iids[0])]
             ins_ev = [str(e) for e in (ref_ins.get("evidence_ids") or []) if e]
-            valid_evs = [
-                str(e)
-                for e in p.evidence_review_ids
-                if (not all_valid_revs or str(e) in all_valid_revs)
-            ]
+            seen_evs: set[str] = set()
+            valid_evs: list[str] = []
+            for e in p.evidence_review_ids:
+                e_str = str(e).strip()
+                if (
+                    e_str
+                    and e_str not in seen_evs
+                    and (not all_valid_revs or e_str in all_valid_revs)
+                ):
+                    seen_evs.add(e_str)
+                    valid_evs.append(e_str)
             for cand_e in ins_ev + all_valid_revs:
                 if len(valid_evs) >= 2:
                     break
-                if cand_e not in valid_evs:
+                if cand_e not in seen_evs:
+                    seen_evs.add(cand_e)
                     valid_evs.append(cand_e)
             p.evidence_review_ids = valid_evs[:4]
 
-            # Fix R2: Ground why_rationale in referenced insight statement
-            if not p.why_rationale or not verify_numbers_in_statement(
-                p.why_rationale, ref_ins.get("numbers") or {}
-            ):
+            # Fix R2: Ground why_rationale in referenced insight statement(s)
+            merged_nums: dict[str, Any] = {}
+            for iid in valid_iids:
+                if str(iid) in insight_map:
+                    for k, v in (insight_map[str(iid)].get("numbers") or {}).items():
+                        merged_nums[f"{iid}_{k}"] = v
+                        merged_nums[k] = v
+            if not p.why_rationale or not verify_numbers_in_statement(p.why_rationale, merged_nums):
                 p.why_rationale = f"Căn cứ trực tiếp từ dữ liệu: {ref_ins.get('statement', '')}"
 
             # Fix R3: Ensure non-empty fields & deadline keyword
@@ -381,32 +403,50 @@ class HybridCritic:
             ):
                 p.how_and_when = f"{how_clean.rstrip('.')} trong vòng 48h.".strip()
 
-            # Fix R4 & R7: Sanitize overclaiming and prohibited policy keywords
+            # Fix R4 & R7: Sanitize overclaiming and prohibited policy keywords across all fields
             for kw in self.overclaim_keywords:
-                p.title = re.sub(
-                    re.escape(kw), "cải thiện khả năng chống thấm", p.title, flags=re.IGNORECASE
-                )
-                p.what_to_do = re.sub(
-                    re.escape(kw),
-                    "cải thiện khả năng chống thấm",
-                    p.what_to_do,
-                    flags=re.IGNORECASE,
-                )
+                pattern = re.escape(kw)
+                replacement = "cải thiện khả năng chống thấm"
+                p.title = re.sub(pattern, replacement, p.title, flags=re.IGNORECASE)
+                p.what_to_do = re.sub(pattern, replacement, p.what_to_do, flags=re.IGNORECASE)
                 p.description = p.what_to_do
+                if p.why_rationale:
+                    p.why_rationale = re.sub(
+                        pattern, replacement, p.why_rationale, flags=re.IGNORECASE
+                    )
+                if p.how_and_when:
+                    p.how_and_when = re.sub(
+                        pattern, replacement, p.how_and_when, flags=re.IGNORECASE
+                    )
             for kw in self.prohibited_policy_keywords:
+                pattern = re.escape(kw)
                 p.title = re.sub(
-                    re.escape(kw),
+                    pattern,
                     "hỗ trợ đổi trả chính hãng qua hệ thống sàn",
                     p.title,
                     flags=re.IGNORECASE,
                 )
                 p.what_to_do = re.sub(
-                    re.escape(kw),
+                    pattern,
                     "hỗ trợ bảo hành đổi mới 1-1 qua cổng CSKH chính thức của sàn",
                     p.what_to_do,
                     flags=re.IGNORECASE,
                 )
                 p.description = p.what_to_do
+                if p.why_rationale:
+                    p.why_rationale = re.sub(
+                        pattern,
+                        "hỗ trợ bảo hành đổi mới qua cổng CSKH chính thức của sàn",
+                        p.why_rationale,
+                        flags=re.IGNORECASE,
+                    )
+                if p.how_and_when:
+                    p.how_and_when = re.sub(
+                        pattern,
+                        "hỗ trợ bảo hành đổi mới 1-1 qua cổng CSKH chính thức của sàn",
+                        p.how_and_when,
+                        flags=re.IGNORECASE,
+                    )
 
             # Fix R6: Deduplicate actions with Jaccard > 0.80
             toks = _tokenize_words(f"{p.title} {p.what_to_do}")

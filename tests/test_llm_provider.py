@@ -6,7 +6,12 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from ecomreview.llm_provider import EngineMode, UnifiedLLMClient, check_ollama_health
+from ecomreview.llm_provider import (
+    EngineMode,
+    UnifiedLLMClient,
+    check_ollama_health,
+    is_agent_llm_enabled,
+)
 from ecomreview.normalize import load_social_lexicon, normalize_social_text
 from ecomreview.schemas import Aspect, Polarity, ReviewAnalysis
 
@@ -97,6 +102,29 @@ def test_load_social_lexicon_yaml_and_health_check() -> None:
             rows = list(csv.DictReader(f))
         assert len(rows) == 2
         assert float(rows[1]["numeric_consistency_pct"]) == 100.0
+
+
+def test_unified_llm_gemini_pool_and_agent_flag(monkeypatch) -> None:
+    """Verify GEMINI_MODEL_POOL configuration and agent LLM env flags."""
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_MODEL_POOL", raising=False)
+    client_default = UnifiedLLMClient(mode=EngineMode.GEMINI_CLOUD)
+    assert client_default.gemini_model == "gemini-3.5-flash"
+    assert client_default.gemini_model_pool == [
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+    ]
+
+    monkeypatch.setenv("GEMINI_MODEL_POOL", "gemini-3.5-flash-lite,gemini-flash-latest")
+    client_custom = UnifiedLLMClient(mode=EngineMode.GEMINI_CLOUD)
+    assert client_custom.gemini_model_pool == ["gemini-3.5-flash-lite", "gemini-flash-latest"]
+
+    monkeypatch.setenv("DEMO_CACHE_MODE", "false")
+    monkeypatch.setenv("ECOMREVIEW_AGENT_LLM_ENABLED", "true")
+    assert is_agent_llm_enabled() is True
 
 
 # CreBy: MenBoyBMN

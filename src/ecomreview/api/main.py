@@ -23,17 +23,31 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Response, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
+from starlette.concurrency import run_in_threadpool
 
 from ecomreview.agent.graph_runner import EcomReviewGraphRunner
 from ecomreview.agent.insight_engine import InsightEngine
-from ecomreview.agent.reply_assistant import generate_customer_reply
+from ecomreview.agent.reply_assistant import check_reply_guardrails, generate_customer_reply
 from ecomreview.agent.tools_aggregator import (
     detect_trend_alerts,
     get_action_impact,
@@ -41,16 +55,25 @@ from ecomreview.agent.tools_aggregator import (
     get_aspect_trend,
     get_hidden_complaints,
     get_platform_comparison,
-    get_platform_gap_stats,
     wilson_ci_pct,
 )
 from ecomreview.analyze.factory import get_analyzer
 from ecomreview.api.security_deps import get_current_reviewer, require_api_key
 from ecomreview.db.database import DatabaseManager
-from ecomreview.ingest_service import ingest_review_batch
+from ecomreview.ingest_service import MAX_UPLOAD_FILE_BYTES, ingest_review_batch, parse_review_file
 from ecomreview.reporting import build_excel_report, build_html_report
+from ecomreview.schemas import Aspect, Polarity
 
 logger = logging.getLogger(__name__)
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _validate_analyzer_method(analyzer_method: str) -> None:
+    """Validate analyzer_method early so unknown values fail cleanly with HTTP 400."""
+    try:
+        get_analyzer(analyzer_method)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
 class ReviewUploadItem(BaseModel):
@@ -66,13 +89,35 @@ class ReviewUploadItem(BaseModel):
     created_at: str | None = None
     opinions: list[dict[str, Any]] = Field(default_factory=list)
 
+    @field_validator("opinions")
+    @classmethod
+    def _validate_opinions(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        validated: list[dict[str, Any]] = []
+        for idx, op in enumerate(value):
+            if not isinstance(op, dict):
+                raise ValueError(f"opinions[{idx}] must be an object")
+            try:
+                asp = Aspect(str(op.get("aspect", "")).strip().upper()).value
+                pol = Polarity(str(op.get("polarity", "")).strip().lower()).value
+            except ValueError as exc:
+                raise ValueError(f"opinions[{idx}] has invalid aspect/polarity: {exc}") from exc
+            validated.append(
+                {
+                    **op,
+                    "aspect": asp,
+                    "polarity": pol,
+                    "evidence": str(op.get("evidence") or ""),
+                }
+            )
+        return validated
+
 
 class ReviewUploadRequest(BaseModel):
     """Batch review upload request payload."""
 
     scenario_tag: str = "real_shop"
     analyzer_method: str = "a1_gemini_v2"
-    reviews: list[ReviewUploadItem]
+    reviews: list[ReviewUploadItem] = Field(min_length=1, max_length=1000)
 
 
 class AnalyzeRunRequest(BaseModel):
@@ -80,7 +125,7 @@ class AnalyzeRunRequest(BaseModel):
 
     scenario_tag: str = "real_shop"
     analyzer_method: str = "a1_gemini_v2"
-    min_n: int = 5
+    min_n: int = Field(default=5, ge=1, le=1000)
     async_mode: bool = False
 
 
@@ -88,8 +133,8 @@ class ActionGenerateRequest(BaseModel):
     """Request payload to trigger the State-Graph ActionPlanner + HybridCritic."""
 
     scenario_tag: str = "real_shop"
-    min_n: int = 5
-    max_actions: int = 5
+    min_n: int = Field(default=5, ge=1, le=1000)
+    max_actions: int = Field(default=5, ge=1, le=20)
 
 
 class ActionDecisionRequest(BaseModel):
@@ -99,6 +144,13 @@ class ActionDecisionRequest(BaseModel):
     note: str = ""
     edited_content: str = ""
     reason_category: str = ""
+
+
+class ReviewReplyStatusRequest(BaseModel):
+    """Payload for updating a customer care reply status (DRAFT/APPROVED/SENT)."""
+
+    status: str = Field(description="DRAFT, APPROVED, or SENT")
+    reply_text: str | None = None
 
 
 def _execute_analysis_task(
@@ -123,11 +175,14 @@ def _execute_analysis_task(
                 (scenario_tag,),
             ).fetchall()
 
+        used_fallback = False
         if unparsed:
             analyzer = get_analyzer(analyzer_method)
             for r in unparsed:
                 clean_raw = str(r["text_raw"])
                 res = analyzer.analyze_review(clean_raw)
+                if getattr(analyzer, "last_used_fallback", False):
+                    used_fallback = True
                 ops = [
                     {
                         "aspect": op.aspect.value
@@ -141,6 +196,7 @@ def _execute_analysis_task(
                     }
                     for op in res.opinions
                 ]
+                item_method = f"{analyzer_method}+b1_fallback" if used_fallback else analyzer_method
                 db.upsert_review_and_opinions(
                     review_id=str(r["review_id"]),
                     platform=str(r["platform"]),
@@ -151,13 +207,21 @@ def _execute_analysis_task(
                     text_norm=str(r["text_norm"]),
                     source=str(r["source"] or "api_upload"),
                     scenario_tag=scenario_tag,
-                    overall_sentiment=str(r["overall_sentiment"] or res.overall_sentiment),
+                    overall_sentiment=str(
+                        r["overall_sentiment"]
+                        or (
+                            res.overall_sentiment.value
+                            if hasattr(res.overall_sentiment, "value")
+                            else str(res.overall_sentiment)
+                        )
+                    ).lower(),
                     informative=bool(res.informative),
                     opinions=ops,
-                    analyzer_method=analyzer_method,
+                    analyzer_method=item_method,
                     created_at=str(r["created_at"]) if r["created_at"] else None,
                 )
 
+        effective_method = f"{analyzer_method}+b1_fallback" if used_fallback else analyzer_method
         engine = InsightEngine(db=db)
         insights = engine.generate_insights(scenario_tag=scenario_tag, min_n=min_n, persist=True)
         db.log_job_complete(
@@ -165,18 +229,21 @@ def _execute_analysis_task(
             status="completed",
             details={
                 "scenario_tag": scenario_tag,
-                "analyzer_method": analyzer_method,
+                "analyzer_method": effective_method,
                 "unparsed_count": len(unparsed),
                 "insights_generated": len(insights),
             },
         )
     except Exception as e:
         logger.exception("Analysis job %d failed: %s", job_id, e)
-        db.log_job_complete(
-            job_id,
-            status="failed",
-            details={"scenario_tag": scenario_tag, "error": str(e)},
-        )
+        try:
+            db.log_job_complete(
+                job_id,
+                status="failed",
+                details={"scenario_tag": scenario_tag, "error": str(e)},
+            )
+        except Exception:
+            logger.exception("Failed to mark analysis job %d as failed", job_id)
 
 
 def create_app(db_path: str | None = None) -> FastAPI:
@@ -190,19 +257,21 @@ def create_app(db_path: str | None = None) -> FastAPI:
         version="1.1.0",
     )
 
-    cors_origins = [
+    resolved_origins = [
         o.strip() for o in os.getenv("ECOMREVIEW_CORS_ORIGINS", "*").split(",") if o.strip()
-    ]
+    ] or ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins or ["*"],
-        allow_credentials=False if cors_origins == ["*"] else True,
+        allow_origins=resolved_origins,
+        allow_credentials=(resolved_origins != ["*"]),
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    db_instance = DatabaseManager(db_path=db_path or os.getenv("ECOMREVIEW_SQLITE_PATH"))
+
     def _get_db() -> DatabaseManager:
-        return DatabaseManager(db_path=db_path or os.getenv("ECOMREVIEW_SQLITE_PATH"))
+        return db_instance
 
     # 1. System Health
     @app.get("/api/v1/health", tags=["System"])
@@ -221,6 +290,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "demo_cache_mode": demo_mode,
             "auth_enabled": auth_enabled,
             "endpoints_count": 15,
+            "extended_endpoints_count": 18,
         }
 
     # 2. Ingestion
@@ -231,6 +301,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     )
     def upload_reviews(payload: ReviewUploadRequest) -> dict[str, Any]:
         """2. Upload, sanitize, analyze and persist a batch of customer reviews."""
+        _validate_analyzer_method(payload.analyzer_method)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="reviews_upload",
@@ -241,22 +312,106 @@ def create_app(db_path: str | None = None) -> FastAPI:
             },
         )
 
-        review_dicts = [item.model_dump() for item in payload.reviews]
-        ingest_res = ingest_review_batch(
-            db=db,
-            reviews=review_dicts,
-            scenario_tag=payload.scenario_tag,
-            analyzer_method=payload.analyzer_method,
-        )
+        try:
+            review_dicts = [item.model_dump() for item in payload.reviews]
+            ingest_res = ingest_review_batch(
+                db=db,
+                reviews=review_dicts,
+                scenario_tag=payload.scenario_tag,
+                analyzer_method=payload.analyzer_method,
+            )
+            db.log_job_complete(job_id, status="completed", details=ingest_res)
+            return {
+                "job_id": job_id,
+                "scenario_tag": payload.scenario_tag,
+                "inserted_count": ingest_res["inserted_count"],
+                "analyzer_method": ingest_res["analyzer_method"],
+                "status": "completed",
+            }
+        except Exception as e:
+            db.log_job_complete(
+                job_id,
+                status="failed",
+                details={"scenario_tag": payload.scenario_tag, "error": str(e)},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Upload failed: {e}",
+            )
 
-        db.log_job_complete(job_id, status="completed", details=ingest_res)
-        return {
-            "job_id": job_id,
-            "scenario_tag": payload.scenario_tag,
-            "inserted_count": ingest_res["inserted_count"],
-            "analyzer_method": ingest_res["analyzer_method"],
-            "status": "completed",
-        }
+    @app.post(
+        "/api/v1/reviews/upload-file",
+        tags=["Ingestion"],
+        dependencies=[Depends(require_api_key)],
+    )
+    async def upload_reviews_file(
+        file: UploadFile = File(...),
+        scenario_tag: str = Form(default="real_shop"),
+        analyzer_method: str = Form(default="b1_rule"),
+        platform: str = Form(default="shopee"),
+        shop: str = Form(default="shop_aomua"),
+        product: str = Form(default="ao_mua_da_ca"),
+    ) -> dict[str, Any]:
+        """16. Upload a .csv or .xlsx review file, validate rows, sanitize PII, and ingest."""
+        _validate_analyzer_method(analyzer_method)
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_FILE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="Kích thước tệp vượt quá giới hạn 5 MB.",
+            )
+
+        try:
+            valid_reviews, skipped_rows = await run_in_threadpool(
+                parse_review_file,
+                filename=file.filename or "upload.csv",
+                content=content,
+                default_platform=platform,
+                default_shop=shop,
+                default_product=product,
+            )
+        except ValueError as ve:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+        db = _get_db()
+        job_id = db.log_job_start(
+            job_type="reviews_upload_file",
+            details={
+                "scenario_tag": scenario_tag,
+                "filename": file.filename,
+                "valid_count": len(valid_reviews),
+                "skipped_count": len(skipped_rows),
+                "analyzer_method": analyzer_method,
+            },
+        )
+        try:
+            ingest_res = await run_in_threadpool(
+                ingest_review_batch,
+                db=db,
+                reviews=valid_reviews,
+                scenario_tag=scenario_tag,
+                analyzer_method=analyzer_method,
+            )
+            db.log_job_complete(job_id, status="completed", details=ingest_res)
+            return {
+                "job_id": job_id,
+                "scenario_tag": scenario_tag,
+                "inserted_count": ingest_res["inserted_count"],
+                "skipped_count": len(skipped_rows),
+                "skipped_rows": skipped_rows[:20],
+                "analyzer_method": ingest_res["analyzer_method"],
+                "status": "completed",
+            }
+        except Exception as e:
+            db.log_job_complete(
+                job_id,
+                status="failed",
+                details={"scenario_tag": scenario_tag, "error": str(e)},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"File upload ingestion failed: {e}",
+            )
 
     # 3. ABSA & Insight Analysis
     @app.post(
@@ -269,6 +424,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         background_tasks: BackgroundTasks,
     ) -> Any:
         """3. Run ABSA analysis and InsightEngine on a scenario (sync or async)."""
+        _validate_analyzer_method(payload.analyzer_method)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="analyze_run",
@@ -314,6 +470,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "SELECT * FROM system_jobs_audit WHERE id = ?", (job_id,)
             ).fetchone()
         job_details = json.loads(job_row["details"] or "{}") if job_row else {}
+
+        if job_row and str(job_row["status"]).lower() == "failed":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=job_details.get("error", "Analysis job failed"),
+            )
 
         return {
             "job_id": job_id,
@@ -365,7 +527,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     SUM(CASE WHEN overall_sentiment = 'positive' THEN 1 ELSE 0 END) AS pos_reviews,
                     SUM(CASE WHEN overall_sentiment = 'negative' THEN 1 ELSE 0 END) AS neg_reviews,
                     SUM(CASE WHEN platform = 'shopee' THEN 1 ELSE 0 END) AS shopee_reviews,
-                    SUM(CASE WHEN platform = 'tiktok' THEN 1 ELSE 0 END) AS tiktok_reviews
+                    SUM(CASE WHEN platform = 'tiktok' THEN 1 ELSE 0 END) AS tiktok_reviews,
+                    SUM(CASE WHEN rating >= 4 THEN 1 ELSE 0 END) AS high_rating_total
                 FROM reviews
                 WHERE scenario_tag = ?
                 """,
@@ -380,9 +543,23 @@ def create_app(db_path: str | None = None) -> FastAPI:
         neg_ci_low, neg_ci_high = wilson_ci_pct(neg_revs, total_revs)
 
         aspect_stats = get_aspect_sentiment_stats(scenario_tag=scenario_tag, min_n=min_n, db=db)
-        platform_gaps = get_platform_gap_stats(scenario_tag=scenario_tag, min_n=min_n, db=db)
         platform_comparison = get_platform_comparison(scenario_tag=scenario_tag, min_n=min_n, db=db)
-        hidden_summary = get_hidden_complaints(scenario_tag=scenario_tag, db=db)
+        platform_gaps = [g for g in platform_comparison if g["gap_pct"] >= 20.0]
+        hidden_items = get_hidden_complaints(scenario_tag=scenario_tag, db=db)
+        hidden_rids = {h["review_id"] for h in hidden_items}
+        aspect_counts: dict[str, int] = defaultdict(int)
+        for h in hidden_items:
+            aspect_counts[h["aspect"]] += 1
+        top_hidden = [
+            {"aspect": asp, "count": cnt}
+            for asp, cnt in sorted(aspect_counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+        hidden_summary = {
+            "hidden_count": len(hidden_rids),
+            "high_rating_total": int(total_row["high_rating_total"] or 0),
+            "top_hidden_aspects": top_hidden,
+            "items": hidden_items,
+        }
 
         return {
             "scenario_tag": scenario_tag,
@@ -411,18 +588,21 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def list_insights(
         scenario_tag: str = Query(default="real_shop"),
         kind: str | None = Query(default=None),
+        include_archived: bool = Query(default=False),
     ) -> dict[str, Any]:
         """6. Retrieve numerically verified Insights for a scenario."""
         db = _get_db()
+        arch_clause = "" if include_archived else " AND COALESCE(is_archived, 0) = 0"
         with db.get_connection(read_only=True) as conn:
             if kind:
                 rows = conn.execute(
-                    "SELECT * FROM insights WHERE scenario_tag = ? AND kind = ? ORDER BY id ASC",
+                    f"SELECT * FROM insights WHERE scenario_tag = ? AND kind = ?{arch_clause} "
+                    f"ORDER BY id ASC",
                     (scenario_tag, kind),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM insights WHERE scenario_tag = ? ORDER BY id ASC",
+                    f"SELECT * FROM insights WHERE scenario_tag = ?{arch_clause} ORDER BY id ASC",
                     (scenario_tag,),
                 ).fetchall()
 
@@ -440,6 +620,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if isinstance(r["evidence_ids"], str)
                 else r["evidence_ids"],
                 "confidence": str(r["confidence"]),
+                "is_archived": bool(r["is_archived"]) if "is_archived" in r.keys() else False,
             }
             for r in rows
         ]
@@ -454,7 +635,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def generate_actions(payload: ActionGenerateRequest) -> dict[str, Any]:
         """7. Execute the P1 State-Graph (Planner <-> HybridCritic) to generate grounded actions."""
         db = _get_db()
-        trace_dir = os.getenv("ECOMREVIEW_TRACE_DIR", "results/traces")
+        trace_raw = Path(os.getenv("ECOMREVIEW_TRACE_DIR", "results/traces"))
+        trace_dir = trace_raw if trace_raw.is_absolute() else (_PROJECT_ROOT / trace_raw)
         runner = EcomReviewGraphRunner(db=db, max_retries=2, trace_dir=trace_dir)
         trace = runner.run_scenario(
             scenario_tag=payload.scenario_tag,
@@ -474,11 +656,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
         scenario_tag: str = Query(default="real_shop"),
         is_marketing: bool | None = Query(default=None),
         status: str | None = Query(default=None),
+        include_archived: bool = Query(default=False),
     ) -> dict[str, Any]:
         """8. Retrieve persisted ActionProposals and their HybridCritic traces."""
         db = _get_db()
         query = "SELECT * FROM actions WHERE scenario_tag = ?"
         params: list[Any] = [scenario_tag]
+        if not include_archived:
+            query += " AND COALESCE(is_archived, 0) = 0"
         if is_marketing is not None:
             query += " AND is_marketing = ?"
             params.append(1 if is_marketing else 0)
@@ -515,6 +700,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if isinstance(r["critic_trace"], str)
                 else r["critic_trace"],
                 "status": str(r["status"]),
+                "is_archived": bool(r["is_archived"]) if "is_archived" in r.keys() else False,
                 "created_at": r["created_at"],
             }
             for r in rows
@@ -576,49 +762,99 @@ def create_app(db_path: str | None = None) -> FastAPI:
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             if review_ids:
-                id_list = [i.strip() for i in review_ids.split(",") if i.strip()]
+                id_list = list(
+                    dict.fromkeys(i.strip() for i in review_ids.split(",") if i.strip())
+                )[:200]
                 if id_list:
                     placeholders = ",".join("?" for _ in id_list)
+                    where_sql = f" WHERE r.scenario_tag = ? AND r.review_id IN ({placeholders})"
+                    p_where = [scenario_tag, *id_list]
+                    if platform:
+                        where_sql += " AND r.platform = ?"
+                        p_where.append(platform)
+                    if aspect:
+                        if polarity:
+                            where_sql += (
+                                " AND EXISTS (SELECT 1 FROM opinions o "
+                                "WHERE o.review_id = r.review_id "
+                                "AND o.scenario_tag = r.scenario_tag "
+                                "AND o.aspect = ? AND o.polarity = ?)"
+                            )
+                            p_where.extend([aspect, polarity])
+                        else:
+                            where_sql += (
+                                " AND EXISTS (SELECT 1 FROM opinions o "
+                                "WHERE o.review_id = r.review_id "
+                                "AND o.scenario_tag = r.scenario_tag "
+                                "AND o.aspect = ?)"
+                            )
+                            p_where.append(aspect)
+                    elif polarity:
+                        where_sql += " AND LOWER(r.overall_sentiment) = ?"
+                        p_where.append(polarity.strip().lower())
+                    cnt_row = conn.execute(
+                        f"SELECT COUNT(*) AS cnt FROM reviews r{where_sql}",
+                        tuple(p_where),
+                    ).fetchone()
+                    total_count = int(cnt_row["cnt"] or 0) if cnt_row else 0
                     rows = conn.execute(
-                        f"SELECT * FROM reviews WHERE scenario_tag = ? "
-                        f"AND review_id IN ({placeholders})",
-                        (scenario_tag, *id_list),
+                        f"SELECT r.* FROM reviews r{where_sql} "
+                        "ORDER BY r.review_id ASC LIMIT ? OFFSET ?",
+                        (*p_where, limit, offset),
                     ).fetchall()
                 else:
                     rows = []
+                    total_count = 0
             elif aspect:
-                q = """
-                    SELECT DISTINCT r.*
-                    FROM reviews r
-                    JOIN opinions o ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
-                    WHERE r.scenario_tag = ? AND o.aspect = ?
-                """
-                p: list[Any] = [scenario_tag, aspect]
+                where_sql = " WHERE r.scenario_tag = ? AND o.aspect = ?"
+                p_where: list[Any] = [scenario_tag, aspect]
                 if polarity:
-                    q += " AND o.polarity = ?"
-                    p.append(polarity)
+                    where_sql += " AND o.polarity = ?"
+                    p_where.append(polarity)
                 if platform:
-                    q += " AND r.platform = ?"
-                    p.append(platform)
-                q += " ORDER BY r.review_id ASC LIMIT ? OFFSET ?"
-                p.extend([limit, offset])
-                rows = conn.execute(q, tuple(p)).fetchall()
+                    where_sql += " AND r.platform = ?"
+                    p_where.append(platform)
+                cnt_row = conn.execute(
+                    f"SELECT COUNT(DISTINCT r.review_id) AS cnt "
+                    f"FROM reviews r "
+                    f"JOIN opinions o ON r.review_id = o.review_id "
+                    f"AND r.scenario_tag = o.scenario_tag"
+                    f"{where_sql}",
+                    tuple(p_where),
+                ).fetchone()
+                total_count = int(cnt_row["cnt"] or 0) if cnt_row else 0
+                rows = conn.execute(
+                    f"SELECT DISTINCT r.* "
+                    f"FROM reviews r "
+                    f"JOIN opinions o ON r.review_id = o.review_id "
+                    f"AND r.scenario_tag = o.scenario_tag"
+                    f"{where_sql} ORDER BY r.review_id ASC LIMIT ? OFFSET ?",
+                    (*p_where, limit, offset),
+                ).fetchall()
             else:
-                q = "SELECT * FROM reviews WHERE scenario_tag = ?"
-                p = [scenario_tag]
+                where_sql = " WHERE scenario_tag = ?"
+                p_where = [scenario_tag]
                 if platform:
-                    q += " AND platform = ?"
-                    p.append(platform)
+                    where_sql += " AND platform = ?"
+                    p_where.append(platform)
                 if polarity:
-                    q += " AND overall_sentiment = ?"
-                    p.append(polarity)
-                q += " ORDER BY review_id ASC LIMIT ? OFFSET ?"
-                p.extend([limit, offset])
-                rows = conn.execute(q, tuple(p)).fetchall()
+                    where_sql += " AND overall_sentiment = ?"
+                    p_where.append(polarity)
+                cnt_row = conn.execute(
+                    f"SELECT COUNT(*) AS cnt FROM reviews{where_sql}",
+                    tuple(p_where),
+                ).fetchone()
+                total_count = int(cnt_row["cnt"] or 0) if cnt_row else 0
+                rows = conn.execute(
+                    f"SELECT * FROM reviews{where_sql} ORDER BY review_id ASC LIMIT ? OFFSET ?",
+                    (*p_where, limit, offset),
+                ).fetchall()
 
-            # Batch fetch opinions to eliminate N+1 queries
+            # Batch fetch opinions and latest reply status to eliminate N+1 queries
             matched_rids = [str(r["review_id"]) for r in rows]
             opinions_map: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            reply_status_map: dict[str, str] = {}
+            latest_reply_map: dict[str, dict[str, Any]] = {}
             if matched_rids:
                 ph = ",".join("?" for _ in matched_rids)
                 op_rows = conn.execute(
@@ -635,6 +871,33 @@ def create_app(db_path: str | None = None) -> FastAPI:
                             "evidence_ok": bool(op["evidence_ok"]),
                         }
                     )
+                rep_rows = conn.execute(
+                    f"SELECT id, review_id, reply_text, mode_used, guardrail_passed, "
+                    f"violations, status, created_by, created_at, sent_at "
+                    f"FROM review_replies "
+                    f"WHERE scenario_tag = ? AND review_id IN ({ph}) ORDER BY id ASC",
+                    (scenario_tag, *matched_rids),
+                ).fetchall()
+                for rep in rep_rows:
+                    rid_key = str(rep["review_id"])
+                    raw_v = rep["violations"]
+                    viol_list = (
+                        json.loads(raw_v or "[]") if isinstance(raw_v, str) else list(raw_v or [])
+                    )
+                    reply_status_map[rid_key] = str(rep["status"])
+                    latest_reply_map[rid_key] = {
+                        "reply_id": int(rep["id"]),
+                        "reply_text": str(rep["reply_text"]),
+                        "mode_used": str(rep["mode_used"]),
+                        "guardrail_report": {
+                            "passed": bool(rep["guardrail_passed"]),
+                            "violations": viol_list,
+                        },
+                        "status": str(rep["status"]),
+                        "created_by": str(rep["created_by"] or ""),
+                        "created_at": str(rep["created_at"] or ""),
+                        "sent_at": str(rep["sent_at"]) if rep["sent_at"] else None,
+                    }
 
             reviews_out = []
             for r in rows:
@@ -647,11 +910,18 @@ def create_app(db_path: str | None = None) -> FastAPI:
                         "text_raw": str(r["text_raw"]),
                         "created_at": str(r["created_at"]) if r["created_at"] else None,
                         "overall_sentiment": str(r["overall_sentiment"] or "neutral"),
+                        "reply_status": reply_status_map.get(rid, "NONE"),
+                        "latest_reply": latest_reply_map.get(rid),
                         "opinions": opinions_map.get(rid, []),
                     }
                 )
 
-        return {"scenario_tag": scenario_tag, "count": len(reviews_out), "reviews": reviews_out}
+        return {
+            "scenario_tag": scenario_tag,
+            "count": len(reviews_out),
+            "total_count": total_count,
+            "reviews": reviews_out,
+        }
 
     # 11. Trend Analysis
     @app.get(
@@ -721,18 +991,138 @@ def create_app(db_path: str | None = None) -> FastAPI:
         review_id: str,
         scenario_tag: str = Query(default="real_shop"),
         mode: str = Query(default="template", description="'template' or 'llm'"),
+        reviewer: str = Depends(get_current_reviewer),
     ) -> dict[str, Any]:
-        """13. Generate and verify a policy-compliant customer service reply draft."""
+        """13. Generate, verify, and persist a policy-compliant customer service reply draft."""
+        norm_mode = mode.strip().lower()
+        if norm_mode not in {"template", "llm"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="mode must be 'template' or 'llm'",
+            )
         db = _get_db()
         res = generate_customer_reply(
             review_id=review_id,
             scenario_tag=scenario_tag,
-            mode=mode,
+            mode=norm_mode,
             db=db,
         )
         if res.get("status") == "error":
             raise HTTPException(status_code=404, detail=res.get("message"))
+        gr = res.get("guardrail_report") or {}
+        reply_id = db.insert_review_reply(
+            review_id=review_id,
+            scenario_tag=scenario_tag,
+            reply_text=str(res["reply_text"]),
+            mode_used=str(res.get("mode_used", mode)),
+            guardrail_passed=bool(gr.get("passed", res.get("guardrail_passed", True))),
+            violations=list(gr.get("violations") or res.get("violations") or []),
+            status="DRAFT",
+            created_by=reviewer,
+        )
+        res["reply_id"] = reply_id
+        res["status"] = "DRAFT"
         return res
+
+    @app.get(
+        "/api/v1/reviews/{review_id}/replies",
+        tags=["Customer Care"],
+        dependencies=[Depends(require_api_key)],
+    )
+    def get_review_replies(
+        review_id: str,
+        scenario_tag: str = Query(default="real_shop"),
+    ) -> dict[str, Any]:
+        """17. Retrieve persisted customer service reply drafts for a review."""
+        db = _get_db()
+        replies = db.list_review_replies(review_id=review_id, scenario_tag=scenario_tag)
+        return {
+            "review_id": review_id,
+            "scenario_tag": scenario_tag,
+            "count": len(replies),
+            "replies": replies,
+        }
+
+    @app.post(
+        "/api/v1/reviews/replies/{reply_id}/status",
+        tags=["Customer Care"],
+        dependencies=[Depends(require_api_key)],
+    )
+    def update_reply_status(
+        reply_id: int,
+        payload: ReviewReplyStatusRequest,
+        reviewer: str = Depends(get_current_reviewer),
+    ) -> dict[str, Any]:
+        """18. Transition a customer reply draft status (DRAFT -> APPROVED -> SENT)."""
+        valid_statuses = {"DRAFT", "APPROVED", "SENT"}
+        target_status = payload.status.strip().upper()
+        if target_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"status must be one of {sorted(valid_statuses)}",
+            )
+        logger.info("Reply %s status transition -> %s by %s", reply_id, target_status, reviewer)
+
+        db = _get_db()
+        with db.get_connection(read_only=True) as conn:
+            existing = conn.execute(
+                "SELECT review_id, scenario_tag, reply_text, guardrail_passed, violations "
+                "FROM review_replies WHERE id = ?",
+                (reply_id,),
+            ).fetchone()
+            if not existing:
+                raise HTTPException(status_code=404, detail=f"Reply {reply_id} not found")
+            neg_rows = conn.execute(
+                "SELECT DISTINCT aspect FROM opinions "
+                "WHERE review_id = ? AND scenario_tag = ? AND polarity = 'negative'",
+                (existing["review_id"], existing["scenario_tag"]),
+            ).fetchall()
+            neg_aspects = [str(r["aspect"]) for r in neg_rows]
+
+        guardrail_passed: bool | None = None
+        violations: list[str] | None = None
+        if payload.reply_text is not None and payload.reply_text.strip():
+            report = check_reply_guardrails(
+                reply_text=payload.reply_text.strip(),
+                negative_aspects=neg_aspects,
+            )
+            guardrail_passed = report.passed
+            violations = report.violations
+            if not report.passed and target_status in {"APPROVED", "SENT"}:
+                joined_viols = "; ".join(report.violations)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Nội dung phản hồi vi phạm quy tắc an toàn G1-G6: {joined_viols}",
+                )
+        elif target_status in {"APPROVED", "SENT"}:
+            stored_passed = bool(existing["guardrail_passed"])
+            recheck = check_reply_guardrails(
+                reply_text=str(existing["reply_text"] or ""),
+                negative_aspects=neg_aspects,
+            )
+            if not stored_passed or not recheck.passed:
+                existing_viols = existing["violations"]
+                if isinstance(existing_viols, str):
+                    try:
+                        existing_viols = json.loads(existing_viols)
+                    except Exception:
+                        existing_viols = [existing_viols] if existing_viols else []
+                viols = recheck.violations or (existing_viols or ["Chưa đạt quy tắc an toàn G1-G6"])
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Nội dung phản hồi vi phạm quy tắc an toàn G1-G6: {'; '.join(viols)}",
+                )
+
+        updated = db.update_review_reply_status(
+            reply_id=reply_id,
+            status=target_status,
+            reply_text=payload.reply_text,
+            guardrail_passed=guardrail_passed,
+            violations=violations,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Reply {reply_id} not found")
+        return updated
 
     # 14. Action Intervention Impact
     @app.get(
@@ -742,9 +1132,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
     )
     def measure_action_impact(
         action_id: int,
-        window_days: int = Query(default=30),
+        window_days: int = Query(default=30, ge=1, le=365),
         since: str | None = Query(default=None),
-        min_n: int = Query(default=3),
+        min_n: int = Query(default=3, ge=1, le=1000),
     ) -> dict[str, Any]:
         """14. Measure pre vs post intervention sentiment for aspects targeted by action."""
         db = _get_db()
@@ -772,9 +1162,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         """15. Export executive multi-tab Excel workbook (.xlsx) or printable HTML report."""
         db = _get_db()
         fmt = format.strip().lower()
+        safe_tag = re.sub(r"[^a-zA-Z0-9_\-]", "_", scenario_tag)[:64]
         if fmt in ("xlsx", "excel"):
             xlsx_bytes = build_excel_report(scenario_tag=scenario_tag, db=db)
-            filename = f"EcomReview_Report_{scenario_tag}.xlsx"
+            filename = f"EcomReview_Report_{safe_tag}.xlsx"
             return Response(
                 content=xlsx_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

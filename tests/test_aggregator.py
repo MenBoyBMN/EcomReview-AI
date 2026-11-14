@@ -4,7 +4,6 @@ from ecomreview.agent.tools_aggregator import (
     get_aspect_sentiment_stats,
     get_hidden_complaints,
     get_platform_gap_stats,
-    get_reviews_by_aspect,
     wilson_ci_pct,
 )
 from ecomreview.db.database import DatabaseManager
@@ -72,11 +71,6 @@ class TestAggregatorTools:
         assert stats[0]["neg_count"] == 4
         assert stats[0]["pos_count"] == 2
         assert stats[0]["confidence"] == "low"
-
-        revs = get_reviews_by_aspect(
-            scenario_tag="test_scen", aspect="WATERPROOF", polarity="negative", db=db
-        )
-        assert len(revs) == 4
 
     def test_hidden_complaints_and_platform_gap(self, tmp_path):
         db = DatabaseManager(tmp_path / "test_gap.db")

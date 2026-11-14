@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS insights (
     numbers           TEXT NOT NULL,
     evidence_ids      TEXT NOT NULL,
     confidence        TEXT NOT NULL,
+    run_id            TEXT,
+    is_archived       INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT
 );
 
@@ -63,7 +65,9 @@ CREATE TABLE IF NOT EXISTS actions (
     evidence_review_ids TEXT NOT NULL,
     critic_passed       INTEGER NOT NULL DEFAULT 1,
     critic_trace        TEXT,
-    status              TEXT NOT NULL DEFAULT 'proposed',
+    status              TEXT NOT NULL DEFAULT 'PENDING',
+    run_id              TEXT,
+    is_archived         INTEGER NOT NULL DEFAULT 0,
     created_at          TEXT
 );
 
@@ -79,7 +83,23 @@ CREATE TABLE IF NOT EXISTS action_feedback (
     decided_at        TEXT
 );
 
--- 6. System background jobs & audit log
+-- 6. Customer care reply drafts history
+CREATE TABLE IF NOT EXISTS review_replies (
+    id               SERIAL PRIMARY KEY,
+    review_id        TEXT NOT NULL,
+    scenario_tag     TEXT NOT NULL DEFAULT 'real_shop',
+    reply_text       TEXT NOT NULL,
+    mode_used        TEXT NOT NULL DEFAULT 'template',
+    guardrail_passed INTEGER NOT NULL DEFAULT 1,
+    violations       TEXT NOT NULL DEFAULT '[]',
+    status           TEXT NOT NULL DEFAULT 'DRAFT',
+    created_by       TEXT,
+    created_at       TEXT,
+    sent_at          TEXT,
+    FOREIGN KEY (review_id, scenario_tag) REFERENCES reviews(review_id, scenario_tag) ON DELETE CASCADE
+);
+
+-- 7. System background jobs & audit log
 CREATE TABLE IF NOT EXISTS system_jobs_audit (
     id                SERIAL PRIMARY KEY,
     job_type          TEXT NOT NULL,
@@ -89,22 +109,41 @@ CREATE TABLE IF NOT EXISTS system_jobs_audit (
     completed_at      TEXT
 );
 
+ALTER TABLE insights ADD COLUMN IF NOT EXISTS run_id TEXT;
+ALTER TABLE insights ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE actions ADD COLUMN IF NOT EXISTS run_id TEXT;
+ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE review_replies ADD COLUMN IF NOT EXISTS sent_at TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_reviews_scenario ON reviews(scenario_tag, platform);
 CREATE INDEX IF NOT EXISTS idx_opinions_aspect_pol ON opinions(scenario_tag, aspect, polarity);
 CREATE INDEX IF NOT EXISTS idx_actions_scenario_status ON actions(scenario_tag, status);
+CREATE INDEX IF NOT EXISTS idx_actions_scenario_archived ON actions(scenario_tag, is_archived);
+CREATE INDEX IF NOT EXISTS idx_opinions_review ON opinions(scenario_tag, review_id);
+CREATE INDEX IF NOT EXISTS idx_insights_scenario_kind ON insights(scenario_tag, kind);
+CREATE INDEX IF NOT EXISTS idx_action_feedback_action_id ON action_feedback(action_id);
+CREATE INDEX IF NOT EXISTS idx_review_replies_review ON review_replies(scenario_tag, review_id);
 
 -- Read-Only Role for Agent Security Layer 4
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'ecom_agent_ro') THEN
-        CREATE ROLE ecom_agent_ro WITH LOGIN PASSWORD 'agent_readonly_pass';
-    END IF;
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'ecom_agent_ro') THEN
+            CREATE ROLE ecom_agent_ro WITH LOGIN PASSWORD 'agent_readonly_pass';
+        END IF;
+    EXCEPTION WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipping CREATE ROLE ecom_agent_ro due to insufficient privileges';
+    END;
+
+    BEGIN
+        EXECUTE format('GRANT CONNECT ON DATABASE %I TO ecom_agent_ro', current_database());
+        GRANT USAGE ON SCHEMA public TO ecom_agent_ro;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO ecom_agent_ro;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ecom_agent_ro;
+    EXCEPTION WHEN insufficient_privilege OR undefined_object THEN
+        RAISE NOTICE 'Skipping GRANTs to ecom_agent_ro due to insufficient privileges or missing object';
+    END;
 END
 $$;
-
-GRANT CONNECT ON DATABASE ecomreview TO ecom_agent_ro;
-GRANT USAGE ON SCHEMA public TO ecom_agent_ro;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO ecom_agent_ro;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ecom_agent_ro;
 
 -- CreBy: MenBoyBMN

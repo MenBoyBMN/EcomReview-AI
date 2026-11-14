@@ -1,11 +1,16 @@
 """Vietnamese Social Text Normalization for E-commerce Reviews."""
 
+import logging
+import os
 import re
 import unicodedata
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
+_DEFAULT_LEXICON_PATH = Path(__file__).resolve().parents[2] / "knowledge" / "vn_social_lexicon.yaml"
 
 # Comprehensive Teencode and abbreviation dictionary on Shopee & TikTok Shop
 TEENCODE_MAP: dict[str, str] = {
@@ -51,10 +56,13 @@ TEENCODE_MAP: dict[str, str] = {
     "nt": "nhắn tin",
     "chất": "chất lượng",
     "chat": "chất lượng",
-    "đẹp": "đẹp",
-    "chê": "chê",
+    "đag": "đang",
+    "tks": "cảm ơn",
     "qúa": "quá",
     "wa": "quá",
+    "ship": "giao hàng",
+    "đỉnh": "tuyệt vời",
+    "xịn": "chất lượng tốt",
 }
 
 EMOJI_SENTIMENT_MAP: dict[str, str] = {
@@ -88,6 +96,7 @@ COMPOUND_FOLLOWERS: set[str] = {
     "vai",
     "dù",
     "du",
+    "da",
     "nhựa",
     "nhua",
     "lỏng",
@@ -216,6 +225,19 @@ def load_social_lexicon(
         "emoji_count": len(EMOJI_SENTIMENT_MAP),
         "compound_followers_count": len(COMPOUND_FOLLOWERS),
     }
+
+
+def _autoload_lexicon() -> None:
+    """Automatically merge external YAML social lexicon once on module import."""
+    if os.getenv("ECOMREVIEW_DISABLE_LEXICON_AUTOLOAD", "").strip().lower() == "true":
+        return
+    try:
+        load_social_lexicon(_DEFAULT_LEXICON_PATH)
+    except Exception as exc:
+        logger.warning("Social lexicon autoload failed: %s", exc)
+
+
+_autoload_lexicon()
 
 
 # CreBy: MenBoyBMN

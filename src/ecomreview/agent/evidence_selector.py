@@ -99,7 +99,7 @@ def get_emerging_general_issues(
             JOIN opinions o
               ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
             WHERE r.scenario_tag = ?
-              AND (o.aspect = 'GENERAL' OR o.polarity IN ('negative', 'neutral'))
+              AND (o.aspect = 'GENERAL' OR o.polarity = 'neutral')
             ORDER BY LENGTH(r.text_raw) DESC
             """,
             (scenario_tag,),

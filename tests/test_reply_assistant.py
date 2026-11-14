@@ -91,5 +91,23 @@ class TestReplyAssistant:
         assert res["guardrail_report"]["passed"]
         assert len(res["reply_text"]) >= 40
 
+    def test_reply_prompt_matches_g4_length_bounds(self):
+        """Verify prompts/reply_v1.md matches the 40-600 G4 bounds enforced in code."""
+        from pathlib import Path
+
+        prompt_text = Path("prompts/reply_v1.md").read_text(encoding="utf-8")
+        assert "40 đến 600 ký tự" in prompt_text
+
+    def test_g6_catches_percentage_discount(self):
+        """Ensure G6 detects percentage monetary promises like '50%'."""
+        from ecomreview.agent.reply_assistant import check_reply_guardrails
+
+        rep = check_reply_guardrails(
+            "Shop rất tiếc về trải nghiệm đường may của bạn, xin giảm 50% cho đơn tiếp theo ạ.",
+            ["WATERPROOF"],
+        )
+        assert not rep.passed
+        assert any("G6" in v for v in rep.violations)
+
 
 # CreBy: MenBoyBMN

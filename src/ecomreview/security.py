@@ -3,10 +3,13 @@
 import re
 
 # Regex patterns for Vietnamese phone numbers, emails, and external links
-PHONE_RE = re.compile(r"(?<!\d)(?:\+?84|0)[\s.\-]?[35789](?:[\s.\-]?\d){8}(?!\d)")
-EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?84\s?0?|0)[\s.\-]?[35789](?:[\s.\-]?\d){8}(?!\d)")
+EMAIL_RE = re.compile(r"[\w.\-+]+@[\w.\-]+\.\w+")
 LINK_RE = re.compile(
-    r"(?:https?://|www\.)\S+|\b(?:zalo\.me|fb\.com|facebook\.com|m\.me)/\S+", re.IGNORECASE
+    r"(?:https?://|www\.)[^\s<>\"']+"
+    r"|\b(?:zalo\.me|fb\.com|facebook\.com|m\.me|shopee\.vn|s\.shopee\.vn|"
+    r"tiktok\.com|vt\.tiktok\.com|lazada\.vn|t\.me|bit\.ly|t\.ly|tinyurl\.com|goo\.gl)/[^\s<>\"']+",
+    re.IGNORECASE,
 )
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -44,10 +47,12 @@ def sanitize_for_llm(text: str, max_chars: int = 1500) -> str:
     """
     if not text:
         return ""
-    cleaned = CONTROL_CHARS_RE.sub("", text)[:max_chars]
-    # Escape XML delimiters to prevent breakout from <customer_review> tags
+    cleaned = CONTROL_CHARS_RE.sub("", text)
+    cleaned = scrub_pii(cleaned)
+    # Escape XML delimiters to prevent breakout from <customer_review> tags, then enforce max_chars
     cleaned = cleaned.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return scrub_pii(cleaned).strip()
+    cleaned = cleaned[:max_chars]
+    return cleaned.strip()
 
 
 def wrap_untrusted_review(text: str) -> str:

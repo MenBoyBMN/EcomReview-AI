@@ -26,13 +26,22 @@ export default function Navbar({
   onOpenUploadModal,
   reviewer,
   onReviewerChange,
+  showToast,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reviewerInput, setReviewerInput] = useState(reviewer);
   const [apiKeyInput, setApiKeyInput] = useState(
     () => localStorage.getItem('ecomreview_api_key') || ''
   );
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      setReviewerInput(reviewer);
+      setApiKeyInput(localStorage.getItem('ecomreview_api_key') || '');
+    }
+  }, [settingsOpen, reviewer]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -46,16 +55,26 @@ export default function Navbar({
 
   const handleSaveSettings = (e) => {
     e.preventDefault();
+    const finalReviewer = reviewerInput.trim() || 'chu_shop_aomua';
     localStorage.setItem('ecomreview_api_key', apiKeyInput.trim());
-    localStorage.setItem('ecomreview_reviewer', reviewer.trim() || 'chu_shop_aomua');
+    localStorage.setItem('ecomreview_reviewer', finalReviewer);
+    onReviewerChange(finalReviewer);
     setSettingsOpen(false);
     onRefreshAll();
   };
 
-  const handleExport = (format) => {
+  const handleExport = async (format) => {
     setMenuOpen(false);
-    const url = api.getReportExportUrl(scenarioTag, format);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      await api.downloadReport(scenarioTag, format);
+    } catch (err) {
+      if (showToast) {
+        showToast(
+          err.message || 'Không thể tải báo cáo. Vui lòng kiểm tra X-API-Key trong Cài đặt.',
+          'error'
+        );
+      }
+    }
   };
 
   return (
@@ -125,7 +144,7 @@ export default function Navbar({
                     setMenuOpen(false);
                     onOpenUploadModal();
                   }}
-                  className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
+                  className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 xl:hidden"
                 >
                   <UploadCloud className="w-4 h-4 text-indigo-500" />
                   <span>Nạp đánh giá mới</span>
@@ -217,8 +236,8 @@ export default function Navbar({
             </label>
             <input
               type="text"
-              value={reviewer}
-              onChange={(e) => onReviewerChange(e.target.value)}
+              value={reviewerInput}
+              onChange={(e) => setReviewerInput(e.target.value)}
               placeholder="chu_shop_aomua"
               className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
             />

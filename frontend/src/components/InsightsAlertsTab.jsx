@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   BellRing,
   Lightbulb,
@@ -36,6 +36,26 @@ export default function InsightsAlertsTab({
   const [selectedKind, setSelectedKind] = useState('ALL');
   const [runningAnalyze, setRunningAnalyze] = useState(false);
   const [asyncJobStatus, setAsyncJobStatus] = useState(null);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    setRunningAnalyze(false);
+    setAsyncJobStatus(null);
+    setSelectedKind('ALL');
+  }, [scenarioTag]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   const filteredInsights =
     selectedKind === 'ALL'
@@ -69,7 +89,8 @@ export default function InsightsAlertsTab({
       if (asyncMode && res.job_id) {
         setAsyncJobStatus({ jobId: res.job_id, status: 'running' });
         showToast(`Đang chạy phân tích ngầm (Mã tiến trình #${res.job_id})...`, 'info');
-        const poll = setInterval(async () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = setInterval(async () => {
           try {
             const job = await api.getJobStatus(res.job_id);
             setAsyncJobStatus({
@@ -78,7 +99,10 @@ export default function InsightsAlertsTab({
               details: job.details,
             });
             if (job.status === 'completed' || job.status === 'failed') {
-              clearInterval(poll);
+              if (pollRef.current) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+              }
               setRunningAnalyze(false);
               onRefreshInsights();
               showToast(
@@ -88,16 +112,21 @@ export default function InsightsAlertsTab({
                 job.status === 'completed' ? 'success' : 'error'
               );
             }
-          } catch {
-            clearInterval(poll);
+          } catch (err) {
+            if (pollRef.current) {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
             setRunningAnalyze(false);
+            setAsyncJobStatus(null);
+            showToast(err.message || 'Mất kết nối với tiến trình phân tích', 'error');
           }
         }, 1200);
       } else {
         setRunningAnalyze(false);
         onRefreshInsights();
         showToast(
-          `Đã cập nhật ${res.insights_generated || insights.length} phát hiện từ dữ liệu!`,
+          `Đã cập nhật ${res.insights_generated ?? insights.length} phát hiện từ dữ liệu!`,
           'success'
         );
       }
@@ -144,6 +173,9 @@ export default function InsightsAlertsTab({
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge tone={al.severity === 'HIGH' ? 'danger' : 'warning'}>
+                      {al.severity === 'HIGH' ? 'Cảnh báo cao' : 'Cảnh báo vừa'}
+                    </Badge>
                     <Badge tone="danger">Tăng +{al.delta_pp}%</Badge>
                     <InfoTip
                       text={`Kỳ ${al.period}: ${al.latest_neg_pct}% chê (${al.latest_n} mẫu) so với nền trước đó ${al.baseline_neg_pct}% (${al.baseline_n} mẫu). Kiểm định z = ${al.z_score}, p = ${al.p_value}.`}
@@ -199,7 +231,11 @@ export default function InsightsAlertsTab({
               <span>
                 Tiến trình chạy ngầm <strong>#{asyncJobStatus.jobId}</strong>:{' '}
                 <strong className="text-indigo-600 dark:text-indigo-400">
-                  {asyncJobStatus.status === 'completed' ? 'Hoàn tất' : 'Đang xử lý...'}
+                  {asyncJobStatus.status === 'completed'
+                    ? 'Hoàn tất'
+                    : asyncJobStatus.status === 'failed'
+                    ? 'Thất bại'
+                    : 'Đang xử lý...'}
                 </strong>
               </span>
             </div>

@@ -20,13 +20,15 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ASPECT_META, getAspectLabel, getAspectShortLabel } from '../constants/taxonomy';
-import { Card, SectionHeader, StatCard, Badge, InfoTip, EmptyState } from './ui';
+import { Card, SectionHeader, StatCard, Badge, InfoTip, EmptyState, Button } from './ui';
 import AspectHealthList from './AspectHealthList';
 
 export default function OverviewTab({
   overview,
   scenarioTag,
   loadingOverview,
+  loadError,
+  onRetry,
   darkMode,
   onNavigateReviewsWithAspect,
 }) {
@@ -34,10 +36,12 @@ export default function OverviewTab({
   const [trendAspect, setTrendAspect] = useState('');
   const [trends, setTrends] = useState([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
+  const [trendError, setTrendError] = useState(null);
 
   useEffect(() => {
     let active = true;
     setLoadingTrends(true);
+    setTrendError(null);
     api
       .getTrends(scenarioTag, trendPeriod, trendAspect, 2)
       .then((res) => {
@@ -54,8 +58,11 @@ export default function OverviewTab({
           setTrends(normalized);
         }
       })
-      .catch(() => {
-        if (active) setTrends([]);
+      .catch((err) => {
+        if (active) {
+          setTrends([]);
+          setTrendError(err.message || 'Không thể tải dữ liệu xu hướng theo thời gian');
+        }
       })
       .finally(() => {
         if (active) setLoadingTrends(false);
@@ -64,6 +71,49 @@ export default function OverviewTab({
       active = false;
     };
   }, [scenarioTag, trendPeriod, trendAspect]);
+
+  const hiddenComplaintsRaw = overview?.hidden_complaints;
+  const totalReviewsCount = overview?.total_reviews ?? 0;
+
+  const normHidden = React.useMemo(() => {
+    if (Array.isArray(hiddenComplaintsRaw)) {
+      const items = hiddenComplaintsRaw;
+      const rids = new Set(items.map((x) => x.review_id));
+      const counts = {};
+      items.forEach((x) => {
+        counts[x.aspect] = (counts[x.aspect] || 0) + 1;
+      });
+      const top = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([aspect, count]) => ({ aspect, count }));
+      return {
+        hidden_count: rids.size,
+        high_rating_total: totalReviewsCount,
+        top_hidden_aspects: top,
+        items,
+      };
+    }
+    return hiddenComplaintsRaw || {};
+  }, [hiddenComplaintsRaw, totalReviewsCount]);
+
+  if (!loadingOverview && loadError && !overview) {
+    return (
+      <Card>
+        <EmptyState
+          icon={AlertTriangle}
+          title="Không thể tải dữ liệu tổng quan"
+          description={loadError}
+          action={
+            onRetry && (
+              <Button variant="primary" size="sm" onClick={onRetry}>
+                Thử tải lại
+              </Button>
+            )
+          }
+        />
+      </Card>
+    );
+  }
 
   if (loadingOverview || !overview) {
     return (
@@ -94,7 +144,6 @@ export default function OverviewTab({
     platform_counts = { shopee: 0, tiktok: 0 },
     aspect_stats = [],
     platform_comparison = [],
-    hidden_complaints = {},
   } = overview;
 
   const posRatePct =
@@ -156,8 +205,8 @@ export default function OverviewTab({
 
         <StatCard
           label="Phàn nàn ẩn (4–5★)"
-          value={hidden_complaints.hidden_count || 0}
-          unit={`/ ${hidden_complaints.high_rating_total || 0} bài 4–5★`}
+          value={normHidden.hidden_count || 0}
+          unit={`/ ${normHidden.high_rating_total || 0} bài 4–5★`}
           tooltip="Các đánh giá khách chấm 4 hoặc 5 sao nhưng nội dung bình luận lại nhắc tới nhược điểm của sản phẩm."
           icon={EyeOff}
           tone="amber"
@@ -165,8 +214,8 @@ export default function OverviewTab({
             <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400">
               <span className="shrink-0">Vấn đề ẩn chính:</span>
               <strong className="text-amber-700 dark:text-amber-300 truncate">
-                {hidden_complaints.top_hidden_aspects?.[0]
-                  ? getAspectShortLabel(hidden_complaints.top_hidden_aspects[0].aspect)
+                {normHidden.top_hidden_aspects?.[0]
+                  ? getAspectShortLabel(normHidden.top_hidden_aspects[0].aspect)
                   : 'Không có'}
               </strong>
             </div>
@@ -251,6 +300,12 @@ export default function OverviewTab({
             <div className="h-64 flex items-center justify-center text-xs text-slate-400">
               Đang tải dữ liệu xu hướng...
             </div>
+          ) : trendError ? (
+            <EmptyState
+              icon={AlertTriangle}
+              title="Không tải được biểu đồ xu hướng"
+              description={trendError}
+            />
           ) : trends.length === 0 ? (
             <EmptyState
               icon={Calendar}

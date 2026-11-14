@@ -98,6 +98,13 @@ class TestExtractNoiseFlags:
         flags = extract_noise_flags(text)
         assert flags["has_emoji"] is True
 
+    def test_yaml_lexicon_autoloaded_on_import(self):
+        """Verify words from knowledge/vn_social_lexicon.yaml normalize without manual call."""
+        normalized = normalize_social_text("shop ship nhanh, áo xịn và đỉnh quá", enable=True)
+        assert "giao hàng" in normalized
+        assert "chất lượng tốt" in normalized
+        assert "tuyệt vời" in normalized
+
     def test_detect_short_review(self):
         """Verify short reviews (<= 3 words) are flagged."""
         text = "quá tốt"
