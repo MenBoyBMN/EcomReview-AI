@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  CloudRain,
   LayoutDashboard,
   Lightbulb,
   Megaphone,
@@ -43,6 +42,7 @@ export default function Sidebar({
   health,
 }) {
   const isHealthy = health?.status === 'healthy';
+  const isStandalone = Boolean(health?.standalone_mode);
 
   return (
     <aside className="w-16 xl:w-64 shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 flex flex-col justify-between sticky top-0 h-screen z-30 select-none">
@@ -50,9 +50,11 @@ export default function Sidebar({
       <div>
         {/* Brand Header */}
         <div className="h-14 px-3 xl:px-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-500/20 shrink-0 mx-auto xl:mx-0">
-            <CloudRain className="w-5 h-5" />
-          </div>
+          <img
+            src="/logo.svg"
+            alt="EcomReview AI Logo"
+            className="w-9 h-9 rounded-xl shadow-sm shadow-indigo-500/20 shrink-0 mx-auto xl:mx-0 select-none"
+          />
           <div className="hidden xl:block min-w-0">
             <div className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
               EcomReview AI
@@ -122,7 +124,9 @@ export default function Sidebar({
       <div className="p-2 xl:p-3 border-t border-slate-200/80 dark:border-slate-800">
         <div
           title={
-            isHealthy
+            isStandalone
+              ? `Đang vận hành ở Chế độ Độc lập trên trình duyệt (Không cần Backend Python) • Tổng ${health.total_reviews_in_db} đánh giá`
+              : isHealthy
               ? `Máy chủ sẵn sàng • Cơ sở dữ liệu: ${health.database_backend?.toUpperCase()} • Tổng ${health.total_reviews_in_db} đánh giá`
               : 'Chưa kết nối được với máy chủ Backend (cổng 8000)'
           }
@@ -130,12 +134,20 @@ export default function Sidebar({
         >
           <span
             className={`w-2 h-2 rounded-full shrink-0 ${
-              isHealthy ? 'bg-emerald-500' : 'bg-rose-500'
+              isStandalone
+                ? 'bg-indigo-500'
+                : isHealthy
+                ? 'bg-emerald-500'
+                : 'bg-rose-500'
             }`}
           />
           <div className="hidden xl:block min-w-0 truncate">
             <span className="font-semibold">
-              {isHealthy ? 'Hệ thống sẵn sàng' : 'Mất kết nối API'}
+              {isStandalone
+                ? 'Chế độ Độc lập'
+                : isHealthy
+                ? 'Hệ thống sẵn sàng'
+                : 'Mất kết nối API'}
             </span>
             {isHealthy && (
               <span className="text-slate-400 dark:text-slate-500 ml-1">

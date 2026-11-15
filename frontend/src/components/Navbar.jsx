@@ -11,7 +11,12 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { SCENARIO_OPTIONS } from '../constants/taxonomy';
-import { api } from '../api/client';
+import {
+  api,
+  getConnectionConfig,
+  setConnectionConfig,
+  resetStandaloneData,
+} from '../api/client';
 import { Button, Modal } from './ui';
 
 export default function Navbar({
@@ -34,12 +39,21 @@ export default function Navbar({
   const [apiKeyInput, setApiKeyInput] = useState(
     () => localStorage.getItem('ecomreview_api_key') || ''
   );
+  const [connectionModeInput, setConnectionModeInput] = useState(
+    () => getConnectionConfig().mode
+  );
+  const [apiBaseUrlInput, setApiBaseUrlInput] = useState(
+    () => getConnectionConfig().baseUrl
+  );
   const menuRef = useRef(null);
 
   useEffect(() => {
     if (settingsOpen) {
+      const cfg = getConnectionConfig();
       setReviewerInput(reviewer);
       setApiKeyInput(localStorage.getItem('ecomreview_api_key') || '');
+      setConnectionModeInput(cfg.mode);
+      setApiBaseUrlInput(cfg.baseUrl);
     }
   }, [settingsOpen, reviewer]);
 
@@ -58,9 +72,25 @@ export default function Navbar({
     const finalReviewer = reviewerInput.trim() || 'chu_shop_aomua';
     localStorage.setItem('ecomreview_api_key', apiKeyInput.trim());
     localStorage.setItem('ecomreview_reviewer', finalReviewer);
+    setConnectionConfig({
+      mode: connectionModeInput,
+      baseUrl: apiBaseUrlInput,
+    });
     onReviewerChange(finalReviewer);
     setSettingsOpen(false);
     onRefreshAll();
+    if (showToast) {
+      showToast('Đã lưu cấu hình kết nối và người phê duyệt.', 'success');
+    }
+  };
+
+  const handleResetStandalone = () => {
+    resetStandaloneData();
+    setSettingsOpen(false);
+    onRefreshAll();
+    if (showToast) {
+      showToast('Đã khôi phục dữ liệu mẫu gốc cho Chế độ Độc lập.', 'info');
+    }
   };
 
   const handleExport = async (format) => {
@@ -225,11 +255,48 @@ export default function Navbar({
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         title="Cài đặt người phê duyệt & kết nối"
-        subtitle="Lưu tên người duyệt khi phê duyệt kế hoạch hành động"
+        subtitle="Chuyển đổi chế độ chạy độc lập hoặc cấu hình máy chủ Backend"
         icon={Settings}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleSaveSettings} className="space-y-4 text-sm">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Chế độ vận hành Frontend
+            </label>
+            <select
+              value={connectionModeInput}
+              onChange={(e) => setConnectionModeInput(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+            >
+              <option value="auto">
+                Tự động (Ưu tiên Backend, tự chạy Độc lập khi Backend tắt)
+              </option>
+              <option value="standalone">
+                Chạy Độc lập hoàn toàn (Dữ liệu nội bộ trên trình duyệt)
+              </option>
+              <option value="remote">Chỉ kết nối máy chủ Backend API</option>
+            </select>
+          </div>
+
+          {connectionModeInput !== 'standalone' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Địa chỉ máy chủ Backend (API Base URL)
+              </label>
+              <input
+                type="text"
+                value={apiBaseUrlInput}
+                onChange={(e) => setApiBaseUrlInput(e.target.value)}
+                placeholder="Để trống (dùng proxy) hoặc http://127.0.0.1:8000"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Điền địa chỉ đầy đủ nếu Frontend được tách chạy ở cổng/tên miền khác Backend.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Tên người duyệt kế hoạch
@@ -246,26 +313,37 @@ export default function Navbar({
             </p>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Mã bảo mật API (Tùy chọn)
-            </label>
-            <input
-              type="password"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Để trống nếu chạy nội bộ"
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-            />
-          </div>
+          {connectionModeInput !== 'standalone' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Mã bảo mật API (Tùy chọn)
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="Để trống nếu chạy nội bộ"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+            </div>
+          )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" size="sm" onClick={() => setSettingsOpen(false)}>
-              Đóng
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Lưu cài đặt
-            </Button>
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleResetStandalone}
+              className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              Khôi phục dữ liệu mẫu gốc
+            </button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setSettingsOpen(false)}>
+                Đóng
+              </Button>
+              <Button type="submit" variant="primary" size="sm">
+                Lưu cài đặt
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

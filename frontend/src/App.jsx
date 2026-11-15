@@ -12,9 +12,13 @@ import UploadModal from './components/UploadModal';
 
 const VALID_TAB_IDS = new Set(NAV_ITEMS.map((item) => item.id));
 
-function getInitialTabFromHash() {
-  const hash = (window.location.hash || '').replace(/^#/, '').trim();
-  return VALID_TAB_IDS.has(hash) ? hash : 'overview';
+function getTabFromLocation() {
+  const pathSegment = (window.location.pathname || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (VALID_TAB_IDS.has(pathSegment)) {
+    return pathSegment;
+  }
+  const legacyHash = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+  return VALID_TAB_IDS.has(legacyHash) ? legacyHash : 'overview';
 }
 
 function getInitialScenarioFromUrl() {
@@ -23,7 +27,7 @@ function getInitialScenarioFromUrl() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(getInitialTabFromHash);
+  const [activeTab, setActiveTab] = useState(getTabFromLocation);
   const [scenarioTag, setScenarioTag] = useState(getInitialScenarioFromUrl);
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('ecomreview_theme') === 'dark';
@@ -62,23 +66,37 @@ export default function App() {
     setActiveTab(tabId);
     const params = new URLSearchParams(window.location.search);
     const query = params.toString() ? `?${params.toString()}` : '';
-    window.history.replaceState(null, '', `${query}#${tabId}`);
+    const nextUrl = `/${tabId}${query}`;
+    if (window.location.pathname !== `/${tabId}` || window.location.hash) {
+      window.history.pushState(null, '', nextUrl);
+    }
   }, []);
 
-  const handleScenarioChange = useCallback((nextScenario) => {
-    setScenarioTag(nextScenario);
-    const params = new URLSearchParams(window.location.search);
-    params.set('scenario', nextScenario);
-    const hash = window.location.hash || '';
-    window.history.replaceState(null, '', `?${params.toString()}${hash}`);
-  }, []);
+  const handleScenarioChange = useCallback(
+    (nextScenario) => {
+      setScenarioTag(nextScenario);
+      const params = new URLSearchParams(window.location.search);
+      params.set('scenario', nextScenario);
+      window.history.replaceState(null, '', `/${activeTab}?${params.toString()}`);
+    },
+    [activeTab]
+  );
 
   useEffect(() => {
-    const onHashChange = () => {
-      setActiveTab(getInitialTabFromHash());
+    const initialTab = getTabFromLocation();
+    const targetPath = `/${initialTab}`;
+    if (window.location.pathname !== targetPath || window.location.hash) {
+      const params = new URLSearchParams(window.location.search);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      window.history.replaceState(null, '', `${targetPath}${query}`);
+    }
+
+    const onPopState = () => {
+      setActiveTab(getTabFromLocation());
+      setScenarioTag(getInitialScenarioFromUrl());
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   useEffect(() => {
