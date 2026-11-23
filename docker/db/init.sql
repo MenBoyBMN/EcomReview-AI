@@ -103,19 +103,65 @@ CREATE TABLE IF NOT EXISTS review_replies (
 CREATE TABLE IF NOT EXISTS system_jobs_audit (
     id                SERIAL PRIMARY KEY,
     job_type          TEXT NOT NULL,
+    scenario_tag      TEXT,
     status            TEXT NOT NULL,
     details           TEXT,
     created_at        TEXT,
     completed_at      TEXT
 );
 
+-- 8. Pilot shops registry (1-to-1 slug <-> scenario_tag isolation)
+CREATE TABLE IF NOT EXISTS pilot_shops (
+    id                SERIAL PRIMARY KEY,
+    slug              TEXT NOT NULL UNIQUE,
+    name              TEXT NOT NULL,
+    industry          TEXT NOT NULL DEFAULT 'raincoat',
+    platforms         TEXT NOT NULL DEFAULT '["shopee","tiktok"]',
+    alert_config      TEXT NOT NULL DEFAULT '{}',
+    webhook_secret    TEXT,
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT
+);
+
+-- 9. Pilot users & RBAC (admin / owner / cskh)
+CREATE TABLE IF NOT EXISTS users (
+    id                SERIAL PRIMARY KEY,
+    email             TEXT NOT NULL UNIQUE,
+    password_hash     TEXT NOT NULL,
+    full_name         TEXT NOT NULL,
+    role              TEXT NOT NULL DEFAULT 'owner',
+    allowed_shops     TEXT NOT NULL DEFAULT '[]',
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT,
+    last_login_at     TEXT
+);
+
+-- 10. Outbound alert dispatches & deduplication log
+CREATE TABLE IF NOT EXISTS alert_dispatches (
+    id                SERIAL PRIMARY KEY,
+    scenario_tag      TEXT NOT NULL,
+    dedup_key         TEXT NOT NULL UNIQUE,
+    channel           TEXT NOT NULL,
+    severity          TEXT NOT NULL DEFAULT 'MEDIUM',
+    title             TEXT NOT NULL,
+    payload           TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'SENT',
+    error_message     TEXT,
+    created_at        TEXT,
+    sent_at           TEXT
+);
+
 ALTER TABLE insights ADD COLUMN IF NOT EXISTS run_id TEXT;
 ALTER TABLE insights ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE actions ADD COLUMN IF NOT EXISTS run_id TEXT;
 ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_archived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE actions ADD COLUMN IF NOT EXISTS implemented_at TEXT;
 ALTER TABLE review_replies ADD COLUMN IF NOT EXISTS sent_at TEXT;
+ALTER TABLE system_jobs_audit ADD COLUMN IF NOT EXISTS scenario_tag TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_reviews_scenario ON reviews(scenario_tag, platform);
+CREATE INDEX IF NOT EXISTS idx_reviews_scenario_created ON reviews(scenario_tag, created_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_scenario_rating ON reviews(scenario_tag, rating);
 CREATE INDEX IF NOT EXISTS idx_opinions_aspect_pol ON opinions(scenario_tag, aspect, polarity);
 CREATE INDEX IF NOT EXISTS idx_actions_scenario_status ON actions(scenario_tag, status);
 CREATE INDEX IF NOT EXISTS idx_actions_scenario_archived ON actions(scenario_tag, is_archived);
@@ -123,6 +169,8 @@ CREATE INDEX IF NOT EXISTS idx_opinions_review ON opinions(scenario_tag, review_
 CREATE INDEX IF NOT EXISTS idx_insights_scenario_kind ON insights(scenario_tag, kind);
 CREATE INDEX IF NOT EXISTS idx_action_feedback_action_id ON action_feedback(action_id);
 CREATE INDEX IF NOT EXISTS idx_review_replies_review ON review_replies(scenario_tag, review_id);
+CREATE INDEX IF NOT EXISTS idx_alert_dispatches_scenario ON alert_dispatches(scenario_tag, status);
+CREATE INDEX IF NOT EXISTS idx_jobs_scenario ON system_jobs_audit(scenario_tag);
 
 -- Read-Only Role for Agent Security Layer 4
 DO $$
@@ -140,6 +188,8 @@ BEGIN
         GRANT USAGE ON SCHEMA public TO ecom_agent_ro;
         GRANT SELECT ON ALL TABLES IN SCHEMA public TO ecom_agent_ro;
         ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ecom_agent_ro;
+        REVOKE SELECT ON users FROM ecom_agent_ro;
+        REVOKE SELECT ON pilot_shops FROM ecom_agent_ro;
     EXCEPTION WHEN insufficient_privilege OR undefined_object THEN
         RAISE NOTICE 'Skipping GRANTs to ecom_agent_ro due to insufficient privileges or missing object';
     END;

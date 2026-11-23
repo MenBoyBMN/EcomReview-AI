@@ -6,7 +6,9 @@ RUN npm ci
 
 COPY frontend/ ./
 ARG VITE_API_BASE_URL=""
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_APP_MODE="production"
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_APP_MODE=$VITE_APP_MODE
 RUN npm run build
 
 FROM nginx:1.27-alpine
@@ -18,4 +20,3 @@ EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 
 # CreBy: MenBoyBMN
-

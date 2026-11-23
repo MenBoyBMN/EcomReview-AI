@@ -1,11 +1,18 @@
 import { standaloneEngine, clearStandaloneOverlay } from './standaloneEngine';
 
 const DEFAULT_ENV_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-const DEFAULT_ENV_MODE = import.meta.env.VITE_CONNECTION_MODE || 'auto';
+export const IS_PRODUCTION_APP =
+  (import.meta.env.VITE_APP_MODE || '').trim().toLowerCase() === 'production';
+const DEFAULT_ENV_MODE = IS_PRODUCTION_APP
+  ? 'remote'
+  : import.meta.env.VITE_CONNECTION_MODE || 'auto';
 
 let runtimeStandbyActive = false;
 
 export function getConnectionConfig() {
+  if (IS_PRODUCTION_APP) {
+    return { mode: 'remote', baseUrl: DEFAULT_ENV_BASE };
+  }
   const mode = localStorage.getItem('ecomreview_connection_mode') || DEFAULT_ENV_MODE;
   const baseUrl = (
     localStorage.getItem('ecomreview_api_base_url') ?? DEFAULT_ENV_BASE
@@ -17,6 +24,10 @@ export function getConnectionConfig() {
 }
 
 export function setConnectionConfig({ mode, baseUrl }) {
+  if (IS_PRODUCTION_APP) {
+    runtimeStandbyActive = false;
+    return;
+  }
   if (mode) {
     localStorage.setItem('ecomreview_connection_mode', mode);
   }
@@ -31,17 +42,17 @@ export function resetStandaloneData() {
 }
 
 function buildHeaders(extra = {}, includeJsonContentType = false) {
-  const apiKey = localStorage.getItem('ecomreview_api_key') || '';
-  const reviewer = localStorage.getItem('ecomreview_reviewer') || 'chu_shop_aomua';
-  const headers = {
-    'X-Reviewer': reviewer,
-    ...extra,
-  };
+  const headers = { ...extra };
+  if (!IS_PRODUCTION_APP) {
+    const apiKey = localStorage.getItem('ecomreview_api_key') || '';
+    const reviewer = localStorage.getItem('ecomreview_reviewer') || 'chu_shop_aomua';
+    headers['X-Reviewer'] = reviewer;
+    if (apiKey) {
+      headers['X-API-Key'] = apiKey;
+    }
+  }
   if (includeJsonContentType && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
-  }
-  if (apiKey) {
-    headers['X-API-Key'] = apiKey;
   }
   return headers;
 }
@@ -54,6 +65,7 @@ async function rawFetchJson(path, options = {}) {
   let response;
   try {
     response = await fetch(url, {
+      credentials: 'include',
       ...options,
       headers: buildHeaders(options.headers, hasJsonBody),
     });
@@ -67,6 +79,9 @@ async function rawFetchJson(path, options = {}) {
   const isJson = contentType.includes('application/json');
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('ecomreview:unauthorized'));
+    }
     // When Vite proxy cannot reach 127.0.0.1:8000 or static host has no /api route,
     // it returns non-JSON 500/502/503/504 or 404 HTML/text.
     if (!isJson && (response.status >= 500 || response.status === 404)) {
@@ -93,7 +108,9 @@ async function rawFetchJson(path, options = {}) {
     } catch {
       // ignore json parse error
     }
-    throw new Error(errorDetail);
+    const err = new Error(errorDetail);
+    err.status = response.status;
+    throw err;
   }
 
   if (!isJson) {
@@ -107,6 +124,10 @@ async function rawFetchJson(path, options = {}) {
 
 async function callWithPolicy(remoteFn, standaloneFn, forceProbe = false) {
   const { mode } = getConnectionConfig();
+  if (IS_PRODUCTION_APP || mode === 'remote') {
+    runtimeStandbyActive = false;
+    return remoteFn();
+  }
   if (mode === 'standalone') {
     runtimeStandbyActive = true;
     return standaloneFn();
@@ -128,6 +149,45 @@ async function callWithPolicy(remoteFn, standaloneFn, forceProbe = false) {
 }
 
 export const api = {
+  // Pilot Auth & Shop Management
+  login: (email, password) =>
+    rawFetchJson('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  logout: () =>
+    rawFetchJson('/api/v1/auth/logout', {
+      method: 'POST',
+    }),
+
+  getMe: () => rawFetchJson('/api/v1/auth/me'),
+
+  getShops: () =>
+    callWithPolicy(
+      () => rawFetchJson('/api/v1/shops'),
+      () => ({ count: 0, shops: [] })
+    ),
+
+  updateShopAlerts: (slug, payload) =>
+    rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/alerts`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  testShopAlerts: (slug) =>
+    rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/alerts/test`, {
+      method: 'POST',
+    }),
+
+  markActionImplemented: (actionId, implementedAt = null) =>
+    rawFetchJson(`/api/v1/actions/${actionId}/implemented`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(implementedAt ? { implemented_at: implementedAt } : {}),
+      }),
+    }),
+
   // 1. GET /api/v1/health
   getHealth: () =>
     callWithPolicy(
@@ -368,6 +428,7 @@ export const api = {
     const url = `${baseUrl}/api/v1/reports/export?${q.toString()}`;
     try {
       const res = await fetch(url, {
+        credentials: 'include',
         headers: buildHeaders(),
       });
       if (!res.ok) {

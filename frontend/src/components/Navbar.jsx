@@ -9,10 +9,13 @@ import {
   RefreshCw,
   UploadCloud,
   MoreHorizontal,
+  BellRing,
+  LogOut,
 } from 'lucide-react';
 import { SCENARIO_OPTIONS } from '../constants/taxonomy';
 import {
   api,
+  IS_PRODUCTION_APP,
   getConnectionConfig,
   setConnectionConfig,
   resetStandaloneData,
@@ -23,6 +26,10 @@ export default function Navbar({
   pageTitle,
   scenarioTag,
   onScenarioChange,
+  pilotShops = [],
+  currentUser = null,
+  onLogout,
+  onOpenAlertSettings,
   darkMode,
   onToggleDark,
   onRefreshAll,
@@ -107,6 +114,14 @@ export default function Navbar({
     }
   };
 
+  const isCskhOnly = currentUser?.role === 'cskh';
+  const selectorOptions =
+    pilotShops.length > 0
+      ? pilotShops.map((s) => ({ value: s.slug, label: `${s.name} (${s.slug})` }))
+      : IS_PRODUCTION_APP
+      ? [{ value: scenarioTag, label: scenarioTag }]
+      : SCENARIO_OPTIONS;
+
   return (
     <>
       <header className="sticky top-0 z-20 h-14 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between gap-3">
@@ -118,7 +133,7 @@ export default function Navbar({
         {/* Right: Compact Scenario Selector + Primary Action + Overflow Menu */}
         <div className="flex items-center gap-2 shrink-0">
           <label className="sr-only" htmlFor="scenario-select">
-            Chọn bộ dữ liệu
+            Chọn gian hàng
           </label>
           <select
             id="scenario-select"
@@ -126,32 +141,36 @@ export default function Navbar({
             onChange={(e) => onScenarioChange(e.target.value)}
             className="h-9 max-w-[210px] sm:max-w-[260px] truncate text-xs sm:text-sm font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
           >
-            {SCENARIO_OPTIONS.map((opt) => (
+            {selectorOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
 
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onOpenUploadModal}
-            className="hidden xl:inline-flex"
-          >
-            <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>Nạp đánh giá</span>
-          </Button>
+          {!isCskhOnly && (
+            <>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={onOpenUploadModal}
+                className="hidden xl:inline-flex"
+              >
+                <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Nạp đánh giá</span>
+              </Button>
 
-          <Button
-            variant="primary"
-            size="md"
-            disabled={isRunningPipeline}
-            onClick={onRunFullPipeline}
-          >
-            <Sparkles className={`w-4 h-4 ${isRunningPipeline ? 'animate-spin' : ''}`} />
-            <span>{isRunningPipeline ? 'Đang phân tích...' : 'Chạy phân tích AI'}</span>
-          </Button>
+              <Button
+                variant="primary"
+                size="md"
+                disabled={isRunningPipeline}
+                onClick={onRunFullPipeline}
+              >
+                <Sparkles className={`w-4 h-4 ${isRunningPipeline ? 'animate-spin' : ''}`} />
+                <span>{isRunningPipeline ? 'Đang phân tích...' : 'Chạy phân tích AI'}</span>
+              </Button>
+            </>
+          )}
 
           {/* Overflow Menu "Thêm" */}
           <div className="relative" ref={menuRef}>
@@ -233,17 +252,50 @@ export default function Navbar({
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setSettingsOpen(true);
-                  }}
-                  className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <Settings className="w-4 h-4 text-slate-400" />
-                  <span>Cài đặt người duyệt ({reviewer})</span>
-                </button>
+                {!isCskhOnly && onOpenAlertSettings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenAlertSettings();
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <BellRing className="w-4 h-4 text-amber-500" />
+                    <span>Cảnh báo Telegram / Webhook</span>
+                  </button>
+                )}
+
+                {!IS_PRODUCTION_APP && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSettingsOpen(true);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                    <span>Cài đặt người duyệt ({reviewer})</span>
+                  </button>
+                )}
+
+                {currentUser?.auth_type === 'jwt' && onLogout && (
+                  <>
+                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Đăng xuất ({currentUser.full_name})</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
@@ -26,12 +27,19 @@ except ImportError:
     psycopg = None
     dict_row = None
 
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:
+    ConnectionPool = None
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_SQLITE_PATH = Path("data/ecomreview.db")
 
 _INITIALIZED_TARGETS: set[str] = set()
 _INIT_LOCK = threading.Lock()
+_PG_POOLS: dict[tuple[str, bool], Any] = {}
+_POOL_LOCK = threading.Lock()
 
 SQLITE_INIT_SCRIPT = """
 CREATE TABLE IF NOT EXISTS reviews (
@@ -133,19 +141,61 @@ CREATE TABLE IF NOT EXISTS review_replies (
 CREATE TABLE IF NOT EXISTS system_jobs_audit (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     job_type          TEXT NOT NULL,
+    scenario_tag      TEXT,
     status            TEXT NOT NULL,
     details           TEXT,
     created_at        TEXT,
     completed_at      TEXT
 );
 
+CREATE TABLE IF NOT EXISTS pilot_shops (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug              TEXT NOT NULL UNIQUE,
+    name              TEXT NOT NULL,
+    industry          TEXT NOT NULL DEFAULT 'raincoat',
+    platforms         TEXT NOT NULL DEFAULT '["shopee","tiktok"]',
+    alert_config      TEXT NOT NULL DEFAULT '{}',
+    webhook_secret    TEXT,
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    email             TEXT NOT NULL UNIQUE,
+    password_hash     TEXT NOT NULL,
+    full_name         TEXT NOT NULL,
+    role              TEXT NOT NULL DEFAULT 'owner',
+    allowed_shops     TEXT NOT NULL DEFAULT '[]',
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT,
+    last_login_at     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS alert_dispatches (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    scenario_tag      TEXT NOT NULL,
+    dedup_key         TEXT NOT NULL UNIQUE,
+    channel           TEXT NOT NULL,
+    severity          TEXT NOT NULL DEFAULT 'MEDIUM',
+    title             TEXT NOT NULL,
+    payload           TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'SENT',
+    error_message     TEXT,
+    created_at        TEXT,
+    sent_at           TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_reviews_scenario ON reviews(scenario_tag, platform);
+CREATE INDEX IF NOT EXISTS idx_reviews_scenario_created ON reviews(scenario_tag, created_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_scenario_rating ON reviews(scenario_tag, rating);
 CREATE INDEX IF NOT EXISTS idx_opinions_aspect_pol ON opinions(scenario_tag, aspect, polarity);
 CREATE INDEX IF NOT EXISTS idx_actions_scenario_status ON actions(scenario_tag, status);
 CREATE INDEX IF NOT EXISTS idx_opinions_review ON opinions(scenario_tag, review_id);
 CREATE INDEX IF NOT EXISTS idx_insights_scenario_kind ON insights(scenario_tag, kind);
 CREATE INDEX IF NOT EXISTS idx_action_feedback_action_id ON action_feedback(action_id);
 CREATE INDEX IF NOT EXISTS idx_review_replies_review ON review_replies(scenario_tag, review_id);
+CREATE INDEX IF NOT EXISTS idx_alert_dispatches_scenario ON alert_dispatches(scenario_tag, status);
 """
 
 _QMARK_RE = re.compile(r"\?")
@@ -245,7 +295,9 @@ class DatabaseManager:
                         "ALTER TABLE insights ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
                         "ALTER TABLE actions ADD COLUMN run_id TEXT",
                         "ALTER TABLE actions ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
+                        "ALTER TABLE actions ADD COLUMN implemented_at TEXT",
                         "ALTER TABLE review_replies ADD COLUMN sent_at TEXT",
+                        "ALTER TABLE system_jobs_audit ADD COLUMN scenario_tag TEXT",
                     )
                     for alter_sql in migration_alters:
                         try:
@@ -256,7 +308,44 @@ class DatabaseManager:
                         "CREATE INDEX IF NOT EXISTS idx_actions_scenario_archived "
                         "ON actions(scenario_tag, is_archived)"
                     )
+                    conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_jobs_scenario "
+                        "ON system_jobs_audit(scenario_tag)"
+                    )
             _INITIALIZED_TARGETS.add(target_key)
+
+    def _get_pg_pool(self, url: str, read_only: bool) -> Any:
+        """Return or initialize a shared psycopg_pool.ConnectionPool for PostgreSQL."""
+        if (
+            ConnectionPool is None
+            or os.getenv("ECOMREVIEW_DB_POOL_DISABLE", "false").strip().lower() == "true"
+        ):
+            return None
+        key = (url, read_only)
+        with _POOL_LOCK:
+            pool = _PG_POOLS.get(key)
+            if pool is None:
+                min_size = int(os.getenv("ECOMREVIEW_PG_POOL_MIN", "1"))
+                max_size = int(os.getenv("ECOMREVIEW_PG_POOL_MAX", "10"))
+                pool = ConnectionPool(
+                    conninfo=url,
+                    min_size=max(1, min_size),
+                    max_size=max(2, max_size),
+                    open=True,
+                )
+                _PG_POOLS[key] = pool
+            return pool
+
+    @staticmethod
+    def close_pools() -> None:
+        """Close all open PostgreSQL connection pools cleanly on application shutdown."""
+        with _POOL_LOCK:
+            for pool in _PG_POOLS.values():
+                try:
+                    pool.close()
+                except Exception as exc:
+                    logger.debug("Error closing PG pool: %s", exc)
+            _PG_POOLS.clear()
 
     @contextmanager
     def get_connection(self, read_only: bool = False) -> Iterator[Any]:
@@ -269,6 +358,23 @@ class DatabaseManager:
             )
             if not url:
                 raise ValueError("DATABASE_URL is not configured for PostgreSQL.")
+            pool = self._get_pg_pool(url, read_only=read_only)
+            if pool is not None:
+                with pool.connection() as conn:
+                    try:
+                        if read_only:
+                            with conn.cursor() as cur:
+                                cur.execute("SET TRANSACTION READ ONLY;")
+                        yield _PgConnection(conn)
+                        if read_only:
+                            conn.rollback()
+                        else:
+                            conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        raise
+                return
+
             conn = psycopg.connect(url)
             try:
                 if read_only:
@@ -314,18 +420,37 @@ class DatabaseManager:
             return int(row["id"] if isinstance(row, (dict, sqlite3.Row)) else row[0])
         return int(getattr(cur, "lastrowid", 0) or 0)
 
-    def log_job_start(self, job_type: str, details: dict[str, Any] | None = None) -> int:
+    def log_job_start(
+        self,
+        job_type: str,
+        details: dict[str, Any] | None = None,
+        scenario_tag: str | None = None,
+    ) -> int:
         """Create a running job record in system_jobs_audit and return job_id."""
+        resolved_scenario = scenario_tag or (details or {}).get("scenario_tag")
         with self.get_connection(read_only=False) as conn:
             cur = conn.execute(
                 """
-                INSERT INTO system_jobs_audit (job_type, status, details, created_at)
-                VALUES (?, 'running', ?, ?)
+                INSERT INTO system_jobs_audit (job_type, scenario_tag, status, details, created_at)
+                VALUES (?, ?, 'running', ?, ?)
                 RETURNING id
                 """,
-                (job_type, json.dumps(details or {}, ensure_ascii=False), _now_iso()),
+                (
+                    job_type,
+                    resolved_scenario,
+                    json.dumps(details or {}, ensure_ascii=False),
+                    _now_iso(),
+                ),
             )
             return self._extract_returning_id(cur)
+
+    def update_job_progress(self, job_id: int, details: dict[str, Any]) -> None:
+        """Update details JSON for an in-flight background job."""
+        with self.get_connection(read_only=False) as conn:
+            conn.execute(
+                "UPDATE system_jobs_audit SET details = ? WHERE id = ?",
+                (json.dumps(details, ensure_ascii=False), job_id),
+            )
 
     def log_job_complete(
         self, job_id: int, status: str = "completed", details: dict[str, Any] | None = None
@@ -755,6 +880,314 @@ class DatabaseManager:
                 }
             )
         return result
+
+    def mark_action_implemented(
+        self, action_id: int, implemented_at: str | None = None
+    ) -> dict[str, Any] | None:
+        """Record actual implementation date on an action for Pre/Post Impact Tracking."""
+        impl_date = (implemented_at or _now_iso())[:10]
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT id, scenario_tag, status FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                "UPDATE actions SET implemented_at = ? WHERE id = ?",
+                (impl_date, action_id),
+            )
+        return {
+            "action_id": action_id,
+            "scenario_tag": str(row["scenario_tag"]),
+            "status": str(row["status"]),
+            "implemented_at": impl_date,
+        }
+
+    # --- Pilot Shops, Users & Alert Dispatches CRUD ---
+
+    @staticmethod
+    def _row_to_shop(row: Any, include_secret: bool = False) -> dict[str, Any]:
+        raw_plat = row["platforms"]
+        platforms = (
+            json.loads(raw_plat or "[]") if isinstance(raw_plat, str) else list(raw_plat or [])
+        )
+        raw_alert = row["alert_config"]
+        alert_cfg = (
+            json.loads(raw_alert or "{}") if isinstance(raw_alert, str) else dict(raw_alert or {})
+        )
+        data = {
+            "id": int(row["id"]),
+            "slug": str(row["slug"]),
+            "name": str(row["name"]),
+            "industry": str(row["industry"] or "raincoat"),
+            "platforms": platforms,
+            "alert_config": alert_cfg,
+            "is_active": bool(row["is_active"]),
+            "created_at": str(row["created_at"] or ""),
+        }
+        if include_secret:
+            data["webhook_secret"] = str(row["webhook_secret"] or "")
+        return data
+
+    def create_pilot_shop(
+        self,
+        slug: str,
+        name: str,
+        industry: str = "raincoat",
+        platforms: list[str] | None = None,
+        alert_config: dict[str, Any] | None = None,
+        webhook_secret: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a Pilot shop record (slug maps 1-to-1 to scenario_tag)."""
+        clean_slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", slug.strip().lower())[:64]
+        if not clean_slug:
+            raise ValueError("Shop slug cannot be empty.")
+        secret_val = webhook_secret or secrets.token_hex(24)
+        plat_json = json.dumps(platforms or ["shopee", "tiktok"], ensure_ascii=False)
+        alert_json = json.dumps(alert_config or {}, ensure_ascii=False)
+        now_str = _now_iso()
+        with self.get_connection(read_only=False) as conn:
+            conn.execute(
+                """
+                INSERT INTO pilot_shops (
+                    slug, name, industry, platforms, alert_config,
+                    webhook_secret, is_active, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                ON CONFLICT (slug) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    industry = EXCLUDED.industry,
+                    platforms = EXCLUDED.platforms,
+                    is_active = 1
+                """,
+                (clean_slug, name.strip(), industry, plat_json, alert_json, secret_val, now_str),
+            )
+            row = conn.execute("SELECT * FROM pilot_shops WHERE slug = ?", (clean_slug,)).fetchone()
+        return self._row_to_shop(row, include_secret=True)
+
+    def get_pilot_shop(self, slug: str, include_secret: bool = False) -> dict[str, Any] | None:
+        """Fetch a single Pilot shop by slug."""
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT * FROM pilot_shops WHERE slug = ?", (slug.strip(),)
+            ).fetchone()
+        return self._row_to_shop(row, include_secret=include_secret) if row else None
+
+    def list_pilot_shops(self, allowed_slugs: list[str] | None = None) -> list[dict[str, Any]]:
+        """List active Pilot shops, optionally filtered to allowed slugs."""
+        with self.get_connection(read_only=False) as conn:
+            rows = conn.execute(
+                "SELECT * FROM pilot_shops WHERE is_active = 1 ORDER BY id ASC"
+            ).fetchall()
+        shops = [self._row_to_shop(r, include_secret=False) for r in rows]
+        if allowed_slugs is not None and "*" not in allowed_slugs:
+            allowed_set = set(allowed_slugs)
+            shops = [s for s in shops if s["slug"] in allowed_set]
+        return shops
+
+    def update_pilot_shop_alerts(
+        self, slug: str, alert_config: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Update outbound alert configuration JSON for a Pilot shop."""
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT * FROM pilot_shops WHERE slug = ?", (slug.strip(),)
+            ).fetchone()
+            if not row:
+                return None
+            existing = json.loads(row["alert_config"] or "{}")
+            merged = {**existing, **alert_config}
+            conn.execute(
+                "UPDATE pilot_shops SET alert_config = ? WHERE slug = ?",
+                (json.dumps(merged, ensure_ascii=False), slug.strip()),
+            )
+            updated = conn.execute(
+                "SELECT * FROM pilot_shops WHERE slug = ?", (slug.strip(),)
+            ).fetchone()
+        return self._row_to_shop(updated, include_secret=False) if updated else None
+
+    @staticmethod
+    def _row_to_user(row: Any, include_hash: bool = False) -> dict[str, Any]:
+        raw_shops = row["allowed_shops"]
+        shops = (
+            json.loads(raw_shops or "[]") if isinstance(raw_shops, str) else list(raw_shops or [])
+        )
+        data = {
+            "id": int(row["id"]),
+            "email": str(row["email"]),
+            "full_name": str(row["full_name"]),
+            "role": str(row["role"]),
+            "allowed_shops": shops,
+            "is_active": bool(row["is_active"]),
+            "created_at": str(row["created_at"] or ""),
+            "last_login_at": str(row["last_login_at"]) if row["last_login_at"] else None,
+        }
+        if include_hash:
+            data["password_hash"] = str(row["password_hash"])
+        return data
+
+    def upsert_user(
+        self,
+        email: str,
+        password_hash: str,
+        full_name: str,
+        role: str = "owner",
+        allowed_shops: list[str] | None = None,
+        is_active: bool = True,
+    ) -> dict[str, Any]:
+        """Create or update a Pilot user account."""
+        clean_email = email.strip().lower()
+        clean_role = role.strip().lower()
+        shops_json = json.dumps(list(allowed_shops or []), ensure_ascii=False)
+        now_str = _now_iso()
+        with self.get_connection(read_only=False) as conn:
+            conn.execute(
+                """
+                INSERT INTO users (
+                    email, password_hash, full_name, role, allowed_shops, is_active, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (email) DO UPDATE SET
+                    password_hash = EXCLUDED.password_hash,
+                    full_name = EXCLUDED.full_name,
+                    role = EXCLUDED.role,
+                    allowed_shops = EXCLUDED.allowed_shops,
+                    is_active = EXCLUDED.is_active
+                """,
+                (
+                    clean_email,
+                    password_hash,
+                    full_name.strip() or clean_email,
+                    clean_role,
+                    shops_json,
+                    1 if is_active else 0,
+                    now_str,
+                ),
+            )
+            row = conn.execute("SELECT * FROM users WHERE email = ?", (clean_email,)).fetchone()
+        return self._row_to_user(row, include_hash=False)
+
+    def get_user_by_email(self, email: str, include_hash: bool = False) -> dict[str, Any] | None:
+        """Lookup a user by normalized email address."""
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE email = ?", (email.strip().lower(),)
+            ).fetchone()
+        return self._row_to_user(row, include_hash=include_hash) if row else None
+
+    def list_users(self) -> list[dict[str, Any]]:
+        """List all Pilot users (password hashes excluded)."""
+        with self.get_connection(read_only=False) as conn:
+            rows = conn.execute("SELECT * FROM users ORDER BY id ASC").fetchall()
+        return [self._row_to_user(r, include_hash=False) for r in rows]
+
+    def update_user_last_login(self, user_id: int) -> None:
+        """Record latest login timestamp for audit visibility."""
+        with self.get_connection(read_only=False) as conn:
+            conn.execute(
+                "UPDATE users SET last_login_at = ? WHERE id = ?",
+                (_now_iso(), user_id),
+            )
+
+    def record_alert_dispatch(
+        self,
+        scenario_tag: str,
+        dedup_key: str,
+        channel: str,
+        severity: str,
+        title: str,
+        payload: dict[str, Any],
+        status: str = "SENT",
+        error_message: str | None = None,
+    ) -> int | None:
+        """Atomically record an alert dispatch; returns None if dedup_key already exists."""
+        now_str = _now_iso()
+        sent_at = now_str if status.upper() == "SENT" else None
+        with self.get_connection(read_only=False) as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO alert_dispatches (
+                    scenario_tag, dedup_key, channel, severity, title,
+                    payload, status, error_message, created_at, sent_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (dedup_key) DO NOTHING
+                RETURNING id
+                """,
+                (
+                    scenario_tag,
+                    dedup_key,
+                    channel,
+                    severity,
+                    title,
+                    json.dumps(payload, ensure_ascii=False),
+                    status.upper(),
+                    error_message,
+                    now_str,
+                    sent_at,
+                ),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return int(row["id"] if isinstance(row, (dict, sqlite3.Row)) else row[0])
+
+    def has_alert_dispatch(self, dedup_key: str) -> bool:
+        """Check whether an alert with the given dedup_key was already dispatched."""
+        with self.get_connection(read_only=True) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM alert_dispatches WHERE dedup_key = ?", (dedup_key,)
+            ).fetchone()
+        return row is not None
+
+    def list_alert_dispatches(self, scenario_tag: str, limit: int = 50) -> list[dict[str, Any]]:
+        """List outbound alert history for a shop, newest first."""
+        with self.get_connection(read_only=True) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, scenario_tag, dedup_key, channel, severity, title,
+                       payload, status, error_message, created_at, sent_at
+                FROM alert_dispatches
+                WHERE scenario_tag = ?
+                ORDER BY id DESC LIMIT ?
+                """,
+                (scenario_tag, max(1, min(200, limit))),
+            ).fetchall()
+        out = []
+        for r in rows:
+            raw_p = r["payload"]
+            out.append(
+                {
+                    "id": int(r["id"]),
+                    "scenario_tag": str(r["scenario_tag"]),
+                    "dedup_key": str(r["dedup_key"]),
+                    "channel": str(r["channel"]),
+                    "severity": str(r["severity"]),
+                    "title": str(r["title"]),
+                    "payload": json.loads(raw_p or "{}") if isinstance(raw_p, str) else raw_p,
+                    "status": str(r["status"]),
+                    "error_message": r["error_message"],
+                    "created_at": str(r["created_at"] or ""),
+                    "sent_at": str(r["sent_at"]) if r["sent_at"] else None,
+                }
+            )
+        return out
+
+    def update_alert_dispatch_status(self, dispatch_id: int, status: str) -> dict[str, Any] | None:
+        """Transition alert dispatch status (ACK / RESOLVED)."""
+        norm = status.strip().upper()
+        with self.get_connection(read_only=False) as conn:
+            row = conn.execute(
+                "SELECT * FROM alert_dispatches WHERE id = ?", (dispatch_id,)
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                "UPDATE alert_dispatches SET status = ? WHERE id = ?",
+                (norm, dispatch_id),
+            )
+        return {
+            "id": int(row["id"]),
+            "scenario_tag": str(row["scenario_tag"]),
+            "status": norm,
+        }
 
 
 # CreBy: MenBoyBMN

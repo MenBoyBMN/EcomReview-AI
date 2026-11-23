@@ -29,6 +29,7 @@ import {
 
 export default function ReviewsCskhTab({
   scenarioTag,
+  userRole = 'owner',
   initialAspect = '',
   onClearInitialAspect,
   onOpenUploadModal,
@@ -257,10 +258,12 @@ export default function ReviewsCskhTab({
           title="Tra cứu đánh giá & soạn phản hồi chăm sóc khách hàng"
           subtitle="Lọc đánh giá theo sàn hoặc khía cạnh và dùng trợ lý AI để soạn câu trả lời lịch sự, đúng quy định sàn"
           actions={
-            <Button variant="primary" size="sm" onClick={onOpenUploadModal}>
-              <UploadCloud className="w-4 h-4" />
-              <span>Thêm đánh giá mới</span>
-            </Button>
+            userRole !== 'cskh' && (
+              <Button variant="primary" size="sm" onClick={onOpenUploadModal}>
+                <UploadCloud className="w-4 h-4" />
+                <span>Thêm đánh giá mới</span>
+              </Button>
+            )
           }
         />
 
@@ -401,6 +404,9 @@ export default function ReviewsCskhTab({
                       ))}
                     </div>
                     <Badge tone={sentimentTone}>{sentimentLabel}</Badge>
+                    {rev.sla_overdue && (
+                      <Badge tone="danger">Quá hạn SLA 24h</Badge>
+                    )}
                     {rev.reply_status && rev.reply_status !== 'NONE' && (
                       <Badge tone="info">Đã có nháp CSKH ({rev.reply_status})</Badge>
                     )}
@@ -551,14 +557,15 @@ export default function ReviewsCskhTab({
                             title={
                               draft.guardrail_report?.passed === false
                                 ? 'Bản nháp chưa đạt quy tắc an toàn G1–G6, hãy sửa trước khi gửi'
-                                : undefined
+                                : 'Sao chép nội dung vào clipboard và đánh dấu đã gửi'
                             }
-                            onClick={() =>
-                              handleUpdateReplyStatus(rev.review_id, draft.reply_id, 'SENT')
-                            }
+                            onClick={async () => {
+                              await handleCopyReply(rev.review_id, draft.reply_text);
+                              await handleUpdateReplyStatus(rev.review_id, draft.reply_id, 'SENT');
+                            }}
                           >
                             <Send className="w-3.5 h-3.5" />
-                            <span>Đánh dấu đã gửi</span>
+                            <span>Sao chép & Đánh dấu đã gửi</span>
                           </Button>
                         )}
                         <Button

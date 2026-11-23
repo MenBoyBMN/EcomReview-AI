@@ -2,19 +2,37 @@ services:
   db:
     image: postgres:16-alpine
     container_name: ecomreview_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ecom_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecom_password}
       POSTGRES_DB: ${POSTGRES_DB:-ecomreview}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-agent_readonly_pass}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
     volumes:
       - ./docker/db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./docker/db/02_init_roles.sh:/docker-entrypoint-initdb.d/02_init_roles.sh:ro
       - pgdata:/var/lib/postgresql/data
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecom_user} -d ${POSTGRES_DB:-ecomreview}"]
       interval: 5s
       timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecomreview_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
   api:
@@ -22,16 +40,21 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     container_name: ecomreview_api
+    restart: unless-stopped
     env_file:
       - path: .env
         required: false
     environment:
+      ECOMREVIEW_ENV: "${ECOMREVIEW_ENV:-development}"
+      ECOMREVIEW_JWT_SECRET: "${ECOMREVIEW_JWT_SECRET:-}"
+      ECOMREVIEW_COOKIE_SECURE: "${ECOMREVIEW_COOKIE_SECURE:-false}"
       DEMO_CACHE_MODE: "${DEMO_CACHE_MODE:-true}"
       ECOMREVIEW_DB_BACKEND: "postgres"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
-      DATABASE_URL_RO: "postgresql://ecom_agent_ro:agent_readonly_pass@db:5432/${POSTGRES_DB:-ecomreview}"
+      DATABASE_URL_RO: "postgresql://ecom_agent_ro:${POSTGRES_RO_PASSWORD:-agent_readonly_pass}@db:5432/${POSTGRES_DB:-ecomreview}"
+      REDIS_URL: "redis://redis:6379/0"
       ECOMREVIEW_API_KEY: "${ECOMREVIEW_API_KEY:-}"
-      ECOMREVIEW_CORS_ORIGINS: "${ECOMREVIEW_CORS_ORIGINS:-*}"
+      ECOMREVIEW_CORS_ORIGINS: "${ECOMREVIEW_CORS_ORIGINS:-http://localhost:5173}"
       ECOMREVIEW_SQLITE_PATH: "/app/data/ecomreview.db"
       ECOMREVIEW_TRACE_DIR: "/app/results/traces"
       ECOMREVIEW_AGENT_LLM: "${ECOMREVIEW_AGENT_LLM:-false}"
@@ -39,14 +62,17 @@ services:
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
       GEMINI_MODEL_POOL: "${GEMINI_MODEL_POOL:-}"
-    command: sh -c "python scripts/migrate_sqlite_to_pg.py --if-empty && uvicorn ecomreview.api.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && uvicorn ecomreview.api.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
       - ./results:/app/results
+    mem_limit: 768m
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
@@ -54,18 +80,65 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: ecomreview_worker
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ECOMREVIEW_ENV: "${ECOMREVIEW_ENV:-development}"
+      DEMO_CACHE_MODE: "${DEMO_CACHE_MODE:-true}"
+      ECOMREVIEW_DB_BACKEND: "postgres"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
+      DATABASE_URL_RO: "postgresql://ecom_agent_ro:${POSTGRES_RO_PASSWORD:-agent_readonly_pass}@db:5432/${POSTGRES_DB:-ecomreview}"
+      REDIS_URL: "redis://redis:6379/0"
+      ECOMREVIEW_LLM_ENGINE: "${ECOMREVIEW_LLM_ENGINE:-gemini}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_MODEL_POOL: "${GEMINI_MODEL_POOL:-}"
+    command: ["rq", "worker", "--url", "redis://redis:6379/0", "ecomreview_default"]
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+    mem_limit: 768m
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, redis; redis.Redis.from_url(os.environ['REDIS_URL']).ping()"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
   frontend:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+      args:
+        VITE_APP_MODE: "${VITE_APP_MODE:-production}"
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-}"
     container_name: ecomreview_frontend
+    restart: unless-stopped
     ports:
       - "5173:80"
+    mem_limit: 128m
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:
+  redisdata:
 
 # CreBy: MenBoyBMN

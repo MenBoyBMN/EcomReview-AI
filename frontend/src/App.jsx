@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
-import { api } from './api/client';
+import { api, IS_PRODUCTION_APP } from './api/client';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
 import Navbar from './components/Navbar';
 import OverviewTab from './components/OverviewTab';
@@ -9,6 +9,8 @@ import ActionsTab from './components/ActionsTab';
 import ReviewsCskhTab from './components/ReviewsCskhTab';
 import EvidenceModal from './components/EvidenceModal';
 import UploadModal from './components/UploadModal';
+import LoginView from './components/LoginView';
+import AlertSettingsModal from './components/AlertSettingsModal';
 
 const VALID_TAB_IDS = new Set(NAV_ITEMS.map((item) => item.id));
 
@@ -38,6 +40,13 @@ export default function App() {
 
   // Pre-selected aspect when navigating from Overview -> Reviews
   const [selectedReviewAspect, setSelectedReviewAspect] = useState('');
+
+  // Auth & Pilot shop states
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [pilotShops, setPilotShops] = useState([]);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
 
   // Core data states
   const [health, setHealth] = useState(null);
@@ -157,9 +166,59 @@ export default function App() {
     }
   }, [scenarioTag, includeArchivedActions, showToast]);
 
+  const loadAuthAndShops = useCallback(async () => {
+    try {
+      const meRes = await api.getMe();
+      setCurrentUser(meRes.user || null);
+      setAuthRequired(false);
+      if (meRes.user?.email) {
+        setReviewer(meRes.user.email);
+      }
+      const shopsRes = await api.getShops().catch(() => ({ shops: [] }));
+      const shops = shopsRes.shops || [];
+      setPilotShops(shops);
+      if (shops.length > 0) {
+        setScenarioTag((prev) =>
+          shops.some((s) => s.slug === prev) ? prev : shops[0].slug
+        );
+      }
+    } catch (err) {
+      if (err.status === 401) {
+        setCurrentUser(null);
+        setAuthRequired(true);
+      } else if (!IS_PRODUCTION_APP) {
+        setAuthRequired(false);
+      }
+    } finally {
+      setAuthChecked(true);
+    }
+  }, []);
+
   useEffect(() => {
+    loadAuthAndShops();
+    const onUnauth = () => {
+      setCurrentUser(null);
+      setAuthRequired(true);
+    };
+    window.addEventListener('ecomreview:unauthorized', onUnauth);
+    return () => window.removeEventListener('ecomreview:unauthorized', onUnauth);
+  }, [loadAuthAndShops]);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // ignore logout network errors
+    }
+    setCurrentUser(null);
+    setAuthRequired(true);
+    showToast('Đã đăng xuất khỏi hệ thống.', 'info');
+  };
+
+  useEffect(() => {
+    if (!authChecked || authRequired) return;
     loadScenarioData();
-  }, [loadScenarioData]);
+  }, [authChecked, authRequired, loadScenarioData]);
 
   const handleRunFullPipeline = async () => {
     try {
@@ -203,6 +262,26 @@ export default function App() {
   ).length;
 
   const currentNavItem = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
+  const activeShopInfo = pilotShops.find((s) => s.slug === scenarioTag) || null;
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-sm text-slate-500">
+        Đang kiểm tra phiên đăng nhập...
+      </div>
+    );
+  }
+
+  if (authRequired) {
+    return (
+      <LoginView
+        onLoginSuccess={() => {
+          setAuthRequired(false);
+          loadAuthAndShops();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -222,6 +301,10 @@ export default function App() {
           pageTitle={currentNavItem.pageTitle}
           scenarioTag={scenarioTag}
           onScenarioChange={handleScenarioChange}
+          pilotShops={pilotShops}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenAlertSettings={() => setAlertModalOpen(true)}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
           onRefreshAll={() => {
@@ -267,6 +350,7 @@ export default function App() {
             <ActionsTab
               scenarioTag={scenarioTag}
               actions={actions}
+              userRole={currentUser?.role || 'owner'}
               includeArchived={includeArchivedActions}
               onToggleIncludeArchived={setIncludeArchivedActions}
               onRefreshActions={loadScenarioData}
@@ -278,6 +362,7 @@ export default function App() {
           {activeTab === 'reviews' && (
             <ReviewsCskhTab
               scenarioTag={scenarioTag}
+              userRole={currentUser?.role || 'owner'}
               initialAspect={selectedReviewAspect}
               onClearInitialAspect={() => setSelectedReviewAspect('')}
               onOpenUploadModal={() => setUploadModalOpen(true)}
@@ -315,6 +400,16 @@ export default function App() {
           loadScenarioData();
           setRefreshTrigger((v) => v + 1);
         }}
+        showToast={showToast}
+      />
+
+      {/* Outbound Alert Settings Modal */}
+      <AlertSettingsModal
+        isOpen={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        scenarioTag={scenarioTag}
+        shopInfo={activeShopInfo}
+        onSaved={loadAuthAndShops}
         showToast={showToast}
       />
 

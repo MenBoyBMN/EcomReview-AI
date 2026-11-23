@@ -25,11 +25,13 @@ export default function UploadModal({
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadReport, setUploadReport] = useState(null);
+  const [jobProgress, setJobProgress] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setUploadReport(null);
+      setJobProgress(null);
       setSelectedFile(null);
     }
   }, [isOpen]);
@@ -62,17 +64,45 @@ export default function UploadModal({
         formData.append('platform', platform);
         formData.append('shop', shop.trim() || 'shop_aomua');
         formData.append('product', product.trim() || 'ao_mua_da_ca');
+        formData.append('async_mode', 'true');
 
         const res = await api.uploadReviewFile(formData);
-        setUploadReport(res);
+        let finalRes = res;
+
+        if (res.status === 'running' && res.job_id) {
+          setJobProgress({ processed: 0, total: res.valid_count || 0 });
+          for (let attempt = 0; attempt < 240; attempt += 1) {
+            await new Promise((r) => setTimeout(r, 1500));
+            const jobRes = await api.getJobStatus(res.job_id);
+            const det = jobRes.details || {};
+            setJobProgress({
+              processed: det.processed_count || 0,
+              total: det.total_count || res.valid_count || 0,
+            });
+            if (jobRes.status === 'completed') {
+              finalRes = {
+                ...res,
+                inserted_count: det.inserted_count ?? det.processed_count ?? res.valid_count ?? 0,
+                status: 'completed',
+              };
+              break;
+            }
+            if (jobRes.status === 'failed') {
+              throw new Error(det.error || 'Tác vụ phân tích nền thất bại.');
+            }
+          }
+        }
+
+        setUploadReport(finalRes);
+        setJobProgress(null);
         showToast(
-          `Đã nạp ${res.inserted_count} đánh giá từ tệp` +
-            (res.skipped_count > 0 ? ` (bỏ qua ${res.skipped_count} dòng lỗi)` : '!'),
+          `Đã nạp ${finalRes.inserted_count} đánh giá từ tệp` +
+            (finalRes.skipped_count > 0 ? ` (bỏ qua ${finalRes.skipped_count} dòng lỗi)` : '!'),
           'success'
         );
         setSelectedFile(null);
         onSuccess();
-        if (!res.skipped_count) onClose();
+        if (!finalRes.skipped_count) onClose();
         return;
       }
 
@@ -244,6 +274,29 @@ export default function UploadModal({
                 }}
               />
             </label>
+
+            {jobProgress && (
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200 space-y-1.5">
+                <div className="flex items-center justify-between font-semibold">
+                  <span>Đang phân tích nền (không làm nghẽn trình duyệt)...</span>
+                  <span className="tabular-nums">
+                    {jobProgress.processed} / {jobProgress.total}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-indigo-200/70 dark:bg-indigo-900 overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-600 transition-all duration-300"
+                    style={{
+                      width: `${
+                        jobProgress.total > 0
+                          ? Math.min(100, Math.round((jobProgress.processed / jobProgress.total) * 100))
+                          : 10
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {uploadReport && uploadReport.skipped_count > 0 && (
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-1">

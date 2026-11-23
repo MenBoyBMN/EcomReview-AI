@@ -20,11 +20,15 @@ Endpoints:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
 from collections import defaultdict
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +38,10 @@ from fastapi import (
     FastAPI,
     File,
     Form,
+    Header,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -57,10 +63,39 @@ from ecomreview.agent.tools_aggregator import (
     get_platform_comparison,
     wilson_ci_pct,
 )
+from ecomreview.alerts.notifier import dispatch_alert, notify_critical_reviews, notify_trend_alerts
 from ecomreview.analyze.factory import get_analyzer
-from ecomreview.api.security_deps import get_current_reviewer, require_api_key
+from ecomreview.api.auth import (
+    SESSION_COOKIE_NAME,
+    create_access_token,
+    get_jwt_secret,
+    hash_password,
+    is_production_env,
+    verify_password,
+)
+from ecomreview.api.logging_utils import RequestLoggingMiddleware, configure_logging
+from ecomreview.api.rate_limit import client_ip_from_request, rate_limiter
+from ecomreview.api.security_deps import (
+    VALID_ROLES,
+    AuthPrincipal,
+    assert_shop_access,
+    get_current_principal,
+    get_current_reviewer,
+    require_roles,
+)
 from ecomreview.db.database import DatabaseManager
-from ecomreview.ingest_service import MAX_UPLOAD_FILE_BYTES, ingest_review_batch, parse_review_file
+from ecomreview.ingest_service import (
+    MAX_ASYNC_UPLOAD_ROWS,
+    MAX_UPLOAD_FILE_BYTES,
+    MAX_UPLOAD_ROWS,
+    ingest_review_batch,
+    parse_review_file,
+)
+from ecomreview.jobs.queue_worker import (
+    enqueue_background_job,
+    task_ingest_review_batch,
+    task_run_analysis,
+)
 from ecomreview.reporting import build_excel_report, build_html_report
 from ecomreview.schemas import Aspect, Polarity
 
@@ -153,6 +188,69 @@ class ReviewReplyStatusRequest(BaseModel):
     reply_text: str | None = None
 
 
+class LoginRequest(BaseModel):
+    """User login payload for Pilot JWT/Cookie authentication."""
+
+    email: str = Field(min_length=3, max_length=160)
+    password: str = Field(min_length=1, max_length=160)
+
+
+class CreateShopRequest(BaseModel):
+    """Payload to register a Pilot shop (slug maps 1-to-1 to scenario_tag)."""
+
+    slug: str = Field(min_length=2, max_length=64)
+    name: str = Field(min_length=2, max_length=120)
+    industry: str = "raincoat"
+    platforms: list[str] = Field(default_factory=lambda: ["shopee", "tiktok"])
+
+
+class UpdateShopAlertsRequest(BaseModel):
+    """Outbound Telegram / Webhook alerting configuration for a Pilot shop."""
+
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+    webhook_url: str | None = None
+    min_rating_alert: int = Field(default=2, ge=1, le=5)
+    enable_critical_review_alert: bool = True
+    enable_ztest_alert: bool = True
+
+
+class CreateUserRequest(BaseModel):
+    """Admin payload to provision an Owner, CSKH, or Admin user."""
+
+    email: str = Field(min_length=3, max_length=160)
+    password: str = Field(min_length=6, max_length=160)
+    full_name: str = Field(min_length=1, max_length=120)
+    role: str = Field(default="owner", description="admin, owner, or cskh")
+    allowed_shops: list[str] = Field(default_factory=list)
+
+
+class ActionImplementedRequest(BaseModel):
+    """Payload to record actual implementation date on an approved action."""
+
+    implemented_at: str | None = Field(
+        default=None, description="ISO date YYYY-MM-DD; defaults to today UTC"
+    )
+
+
+class AlertStatusUpdateRequest(BaseModel):
+    """Payload to acknowledge or resolve an outbound alert dispatch."""
+
+    status: str = Field(description="ACK or RESOLVED")
+
+
+def _is_sla_overdue(rating: int, reply_status: str, created_at: str | None) -> bool:
+    """Flag negative/low-rating reviews (<=3 stars) unanswered for >24 hours."""
+    if rating > 3 or reply_status.upper() == "SENT" or not created_at:
+        return False
+    raw = created_at.strip()[:10]
+    try:
+        rev_dt = datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - rev_dt > timedelta(hours=24)
+    except ValueError:
+        return False
+
+
 def _execute_analysis_task(
     job_id: int,
     scenario_tag: str,
@@ -224,6 +322,8 @@ def _execute_analysis_task(
         effective_method = f"{analyzer_method}+b1_fallback" if used_fallback else analyzer_method
         engine = InsightEngine(db=db)
         insights = engine.generate_insights(scenario_tag=scenario_tag, min_n=min_n, persist=True)
+        alerts = detect_trend_alerts(scenario_tag=scenario_tag, min_n=min_n, db=db)
+        dispatches = notify_trend_alerts(db=db, scenario_tag=scenario_tag, alerts=alerts)
         db.log_job_complete(
             job_id,
             status="completed",
@@ -232,6 +332,8 @@ def _execute_analysis_task(
                 "analyzer_method": effective_method,
                 "unparsed_count": len(unparsed),
                 "insights_generated": len(insights),
+                "alerts_detected": len(alerts),
+                "alerts_dispatched": len([d for d in dispatches if d.get("status") == "SENT"]),
             },
         )
     except Exception as e:
@@ -248,18 +350,36 @@ def _execute_analysis_task(
 
 def create_app(db_path: str | None = None) -> FastAPI:
     """Factory creating the FastAPI application with configurable database path."""
+    resolved_origins = [
+        o.strip() for o in os.getenv("ECOMREVIEW_CORS_ORIGINS", "*").split(",") if o.strip()
+    ] or ["*"]
+
+    if is_production_env():
+        get_jwt_secret()
+        if resolved_origins == ["*"]:
+            raise RuntimeError(
+                "ECOMREVIEW_CORS_ORIGINS cannot be '*' when ECOMREVIEW_ENV=production."
+            )
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        configure_logging()
+        try:
+            yield
+        finally:
+            DatabaseManager.close_pools()
+
     app = FastAPI(
         title="EcomReview AI API",
         description=(
             "Vietnamese Aspect-Based Sentiment Analysis & Evidence-Grounded "
             "Marketing Action Planning API for Raincoat E-Commerce SMEs."
         ),
-        version="1.1.0",
+        version="1.2.0",
+        lifespan=_lifespan,
     )
 
-    resolved_origins = [
-        o.strip() for o in os.getenv("ECOMREVIEW_CORS_ORIGINS", "*").split(",") if o.strip()
-    ] or ["*"]
+    app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_origins,
@@ -268,10 +388,290 @@ def create_app(db_path: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    db_instance = DatabaseManager(db_path=db_path or os.getenv("ECOMREVIEW_SQLITE_PATH"))
+    resolved_db_path = db_path or os.getenv("ECOMREVIEW_SQLITE_PATH")
+    db_instance = DatabaseManager(db_path=resolved_db_path)
 
     def _get_db() -> DatabaseManager:
         return db_instance
+
+    # --- Pilot Authentication, Shop Management & Webhook Ingestion ---
+    @app.post("/api/v1/auth/login", tags=["Auth"])
+    def auth_login(payload: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
+        """Authenticate a Pilot user and issue an HttpOnly JWT session cookie."""
+        rate_limiter.check(
+            f"login:{client_ip_from_request(request)}", max_requests=10, window_seconds=60
+        )
+        db = _get_db()
+        user = db.get_user_by_email(payload.email, include_hash=True)
+        if (
+            not user
+            or not user["is_active"]
+            or not verify_password(payload.password, user["password_hash"])
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email hoặc mật khẩu không chính xác.",
+            )
+        token = create_access_token(user)
+        db.update_user_last_login(int(user["id"]))
+        raw_secure = os.getenv("ECOMREVIEW_COOKIE_SECURE", "").strip().lower()
+        if raw_secure in {"true", "1", "yes"}:
+            cookie_secure = True
+        elif raw_secure in {"false", "0", "no"}:
+            cookie_secure = False
+        else:
+            cookie_secure = is_production_env()
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=token,
+            httponly=True,
+            samesite="lax",
+            secure=cookie_secure,
+            max_age=12 * 3600,
+            path="/",
+        )
+        public_user = {k: v for k, v in user.items() if k != "password_hash"}
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": public_user,
+        }
+
+    @app.post("/api/v1/auth/logout", tags=["Auth"])
+    def auth_logout(response: Response) -> dict[str, Any]:
+        """Clear the HttpOnly JWT session cookie."""
+        response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+        return {"status": "logged_out"}
+
+    @app.get("/api/v1/auth/me", tags=["Auth"])
+    def auth_me(principal: AuthPrincipal = Depends(get_current_principal)) -> dict[str, Any]:
+        """Return currently authenticated user profile and allowed Pilot shops."""
+        return {
+            "user": {
+                "id": principal.user_id,
+                "email": principal.email,
+                "full_name": principal.full_name,
+                "role": principal.role,
+                "allowed_shops": principal.allowed_shops,
+                "auth_type": principal.auth_type,
+            },
+            "env": os.getenv("ECOMREVIEW_ENV", "development").strip().lower(),
+        }
+
+    @app.get("/api/v1/shops", tags=["Pilot Management"])
+    def list_shops(principal: AuthPrincipal = Depends(get_current_principal)) -> dict[str, Any]:
+        """List active Pilot shops accessible to the authenticated user."""
+        db = _get_db()
+        allowed = None if principal.is_admin else principal.allowed_shops
+        shops = db.list_pilot_shops(allowed_slugs=allowed)
+        sanitized = []
+        for s in shops:
+            acfg = dict(s.get("alert_config") or {})
+            if acfg.get("telegram_bot_token"):
+                acfg["telegram_bot_token_configured"] = True
+                acfg["telegram_bot_token"] = ""
+            else:
+                acfg["telegram_bot_token_configured"] = False
+            sanitized.append({**s, "alert_config": acfg})
+        return {"count": len(sanitized), "shops": sanitized}
+
+    @app.post("/api/v1/shops", tags=["Pilot Management"])
+    def create_shop(
+        payload: CreateShopRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """Register a new Pilot shop workspace (Admin only)."""
+        db = _get_db()
+        shop = db.create_pilot_shop(
+            slug=payload.slug,
+            name=payload.name,
+            industry=payload.industry,
+            platforms=payload.platforms,
+        )
+        return shop
+
+    @app.patch("/api/v1/shops/{slug}/alerts", tags=["Pilot Management"])
+    def update_shop_alerts(
+        slug: str,
+        payload: UpdateShopAlertsRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Configure Telegram Bot / Webhook outbound alerting for a Pilot shop."""
+        assert_shop_access(principal, slug)
+        db = _get_db()
+        if not db.get_pilot_shop(slug):
+            db.create_pilot_shop(slug=slug, name=slug)
+        patch: dict[str, Any] = {
+            "min_rating_alert": payload.min_rating_alert,
+            "enable_critical_review_alert": payload.enable_critical_review_alert,
+            "enable_ztest_alert": payload.enable_ztest_alert,
+        }
+        if payload.telegram_bot_token is not None and payload.telegram_bot_token.strip():
+            patch["telegram_bot_token"] = payload.telegram_bot_token.strip()
+        if payload.telegram_chat_id is not None:
+            patch["telegram_chat_id"] = payload.telegram_chat_id.strip()
+        if payload.webhook_url is not None:
+            patch["webhook_url"] = payload.webhook_url.strip()
+        updated = db.update_pilot_shop_alerts(slug, patch)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Shop '{slug}' not found.")
+        return updated
+
+    @app.post("/api/v1/shops/{slug}/alerts/test", tags=["Pilot Management"])
+    def test_shop_alerts(
+        slug: str,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Send a test outbound alert message to verify Telegram / Webhook settings."""
+        assert_shop_access(principal, slug)
+        db = _get_db()
+        results = dispatch_alert(
+            db=db,
+            scenario_tag=slug,
+            dedup_key=f"test:{slug}",
+            severity="INFO",
+            title="Kiểm tra kết nối cảnh báo EcomReview AI",
+            message_text=(
+                f"Kênh cảnh báo tự động cho gian hàng '{slug}' đã hoạt động bình thường "
+                f"(kích hoạt bởi {principal.email})."
+            ),
+            payload={"type": "test_alert", "triggered_by": principal.email},
+            force=True,
+        )
+        if not results:
+            raise HTTPException(
+                status_code=400,
+                detail="Chưa cấu hình Telegram Bot Token/Chat ID hoặc Webhook URL cho gian hàng.",
+            )
+        return {"shop": slug, "results": results}
+
+    @app.get("/api/v1/alerts/history", tags=["Analytics"])
+    def get_alert_history(
+        scenario_tag: str = Query(default="real_shop"),
+        limit: int = Query(default=50, ge=1, le=200),
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """List persisted outbound alert dispatches for a shop."""
+        assert_shop_access(principal, scenario_tag)
+        db = _get_db()
+        items = db.list_alert_dispatches(scenario_tag=scenario_tag, limit=limit)
+        return {"scenario_tag": scenario_tag, "count": len(items), "dispatches": items}
+
+    @app.patch("/api/v1/alerts/history/{dispatch_id}", tags=["Analytics"])
+    def update_alert_history_status(
+        dispatch_id: int,
+        payload: AlertStatusUpdateRequest,
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Acknowledge or resolve a dispatched alert."""
+        target = payload.status.strip().upper()
+        if target not in {"ACK", "RESOLVED"}:
+            raise HTTPException(status_code=400, detail="status must be 'ACK' or 'RESOLVED'")
+        db = _get_db()
+        with db.get_connection(read_only=True) as conn:
+            row = conn.execute(
+                "SELECT id, scenario_tag FROM alert_dispatches WHERE id = ?", (dispatch_id,)
+            ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Alert dispatch {dispatch_id} not found")
+        assert_shop_access(principal, str(row["scenario_tag"]))
+        updated = db.update_alert_dispatch_status(dispatch_id, target)
+        return updated or {"id": dispatch_id, "status": target}
+
+    @app.get("/api/v1/users", tags=["Pilot Management"])
+    def list_users(
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """List Pilot user accounts (Admin only)."""
+        db = _get_db()
+        users = db.list_users()
+        return {"count": len(users), "users": users}
+
+    @app.post("/api/v1/users", tags=["Pilot Management"])
+    def create_user(
+        payload: CreateUserRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """Provision a Pilot user account with role and allowed shops (Admin only)."""
+        role = payload.role.strip().lower()
+        if role not in VALID_ROLES:
+            raise HTTPException(
+                status_code=400, detail=f"role must be one of {sorted(VALID_ROLES)}"
+            )
+        db = _get_db()
+        return db.upsert_user(
+            email=payload.email,
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name,
+            role=role,
+            allowed_shops=payload.allowed_shops,
+        )
+
+    @app.post("/api/v1/integrations/webhook/{shop_slug}", tags=["Integrations"])
+    async def webhook_ingest_reviews(
+        shop_slug: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        x_signature: str | None = Header(default=None, alias="X-EcomReview-Signature"),
+    ) -> Any:
+        """HMAC-authenticated webhook endpoint for n8n/Sapo/Haravan/Marketplace review pushes."""
+        db = _get_db()
+        shop = db.get_pilot_shop(shop_slug, include_secret=True)
+        if not shop or not shop.get("webhook_secret"):
+            raise HTTPException(status_code=404, detail=f"Webhook not enabled for '{shop_slug}'.")
+        raw_body = await request.body()
+        expected_sig = hmac.new(
+            shop["webhook_secret"].encode("utf-8"), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not x_signature or not hmac.compare_digest(x_signature.strip(), expected_sig):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid X-EcomReview-Signature.",
+            )
+        try:
+            body_json = json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {exc}") from exc
+
+        raw_reviews = body_json.get("reviews") if isinstance(body_json, dict) else body_json
+        if not isinstance(raw_reviews, list) or not raw_reviews:
+            raise HTTPException(status_code=400, detail="Payload must contain non-empty reviews.")
+        analyzer_method = (
+            str(body_json.get("analyzer_method", "a1_gemini_v2"))
+            if isinstance(body_json, dict)
+            else "a1_gemini_v2"
+        )
+        _validate_analyzer_method(analyzer_method)
+
+        job_id = db.log_job_start(
+            job_type="webhook_ingest",
+            scenario_tag=shop_slug,
+            details={
+                "scenario_tag": shop_slug,
+                "total_count": len(raw_reviews),
+                "processed_count": 0,
+                "analyzer_method": analyzer_method,
+            },
+        )
+        dispatch_backend = enqueue_background_job(
+            task_ingest_review_batch,
+            background_tasks,
+            job_id=job_id,
+            scenario_tag=shop_slug,
+            reviews=raw_reviews[:MAX_ASYNC_UPLOAD_ROWS],
+            analyzer_method=analyzer_method,
+            db_path=resolved_db_path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "job_id": job_id,
+                "scenario_tag": shop_slug,
+                "queued_count": min(len(raw_reviews), MAX_ASYNC_UPLOAD_ROWS),
+                "queue_backend": dispatch_backend,
+                "status": "running",
+            },
+        )
 
     # 1. System Health
     @app.get("/api/v1/health", tags=["System"])
@@ -281,11 +681,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
         with db.get_connection(read_only=True) as conn:
             rev_count = conn.execute("SELECT COUNT(*) AS cnt FROM reviews").fetchone()["cnt"]
         demo_mode = os.getenv("DEMO_CACHE_MODE", "true").lower() == "true"
-        auth_enabled = bool(os.getenv("ECOMREVIEW_API_KEY", "").strip())
+        auth_enabled = bool(os.getenv("ECOMREVIEW_API_KEY", "").strip()) or is_production_env()
+        queue_backend = "redis_rq" if os.getenv("REDIS_URL", "").strip() else "in_memory"
         return {
             "status": "healthy",
+            "env": os.getenv("ECOMREVIEW_ENV", "development").strip().lower(),
             "database_backend": db.backend,
             "database_status": "connected",
+            "queue_backend": queue_backend,
             "total_reviews_in_db": int(rev_count),
             "demo_cache_mode": demo_mode,
             "auth_enabled": auth_enabled,
@@ -297,14 +700,19 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/reviews/upload",
         tags=["Ingestion"],
-        dependencies=[Depends(require_api_key)],
     )
-    def upload_reviews(payload: ReviewUploadRequest) -> dict[str, Any]:
+    def upload_reviews(
+        payload: ReviewUploadRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
         """2. Upload, sanitize, analyze and persist a batch of customer reviews."""
+        assert_shop_access(principal, payload.scenario_tag)
+        rate_limiter.check(f"upload:{principal.email}", max_requests=30, window_seconds=60)
         _validate_analyzer_method(payload.analyzer_method)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="reviews_upload",
+            scenario_tag=payload.scenario_tag,
             details={
                 "scenario_tag": payload.scenario_tag,
                 "count": len(payload.reviews),
@@ -320,6 +728,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 scenario_tag=payload.scenario_tag,
                 analyzer_method=payload.analyzer_method,
             )
+            notify_critical_reviews(db=db, scenario_tag=payload.scenario_tag, reviews=review_dicts)
             db.log_job_complete(job_id, status="completed", details=ingest_res)
             return {
                 "job_id": job_id,
@@ -342,17 +751,21 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/reviews/upload-file",
         tags=["Ingestion"],
-        dependencies=[Depends(require_api_key)],
     )
     async def upload_reviews_file(
+        background_tasks: BackgroundTasks,
         file: UploadFile = File(...),
         scenario_tag: str = Form(default="real_shop"),
         analyzer_method: str = Form(default="b1_rule"),
         platform: str = Form(default="shopee"),
         shop: str = Form(default="shop_aomua"),
         product: str = Form(default="ao_mua_da_ca"),
-    ) -> dict[str, Any]:
+        async_mode: bool = Form(default=False),
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> Any:
         """16. Upload a .csv or .xlsx review file, validate rows, sanitize PII, and ingest."""
+        assert_shop_access(principal, scenario_tag)
+        rate_limiter.check(f"upload_file:{principal.email}", max_requests=20, window_seconds=60)
         _validate_analyzer_method(analyzer_method)
         content = await file.read()
         if len(content) > MAX_UPLOAD_FILE_BYTES:
@@ -361,6 +774,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 detail="Kích thước tệp vượt quá giới hạn 5 MB.",
             )
 
+        max_rows = MAX_ASYNC_UPLOAD_ROWS if async_mode else MAX_UPLOAD_ROWS
         try:
             valid_reviews, skipped_rows = await run_in_threadpool(
                 parse_review_file,
@@ -369,6 +783,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 default_platform=platform,
                 default_shop=shop,
                 default_product=product,
+                max_rows=max_rows,
             )
         except ValueError as ve:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
@@ -376,14 +791,46 @@ def create_app(db_path: str | None = None) -> FastAPI:
         db = _get_db()
         job_id = db.log_job_start(
             job_type="reviews_upload_file",
+            scenario_tag=scenario_tag,
             details={
                 "scenario_tag": scenario_tag,
                 "filename": file.filename,
                 "valid_count": len(valid_reviews),
+                "total_count": len(valid_reviews),
+                "processed_count": 0,
                 "skipped_count": len(skipped_rows),
                 "analyzer_method": analyzer_method,
+                "async_mode": async_mode,
             },
         )
+        if async_mode:
+            queue_backend = enqueue_background_job(
+                task_ingest_review_batch,
+                background_tasks,
+                job_id=job_id,
+                scenario_tag=scenario_tag,
+                reviews=valid_reviews,
+                analyzer_method=analyzer_method,
+                db_path=resolved_db_path,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={
+                    "job_id": job_id,
+                    "scenario_tag": scenario_tag,
+                    "valid_count": len(valid_reviews),
+                    "inserted_count": 0,
+                    "skipped_count": len(skipped_rows),
+                    "skipped_rows": skipped_rows[:20],
+                    "analyzer_method": analyzer_method,
+                    "queue_backend": queue_backend,
+                    "status": "running",
+                    "message": (
+                        "Tệp đang được phân tích nền. Theo dõi tiến độ qua /api/v1/jobs/{job_id}."
+                    ),
+                },
+            )
+
         try:
             ingest_res = await run_in_threadpool(
                 ingest_review_batch,
@@ -391,6 +838,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 reviews=valid_reviews,
                 scenario_tag=scenario_tag,
                 analyzer_method=analyzer_method,
+            )
+            await run_in_threadpool(
+                notify_critical_reviews, db=db, scenario_tag=scenario_tag, reviews=valid_reviews
             )
             db.log_job_complete(job_id, status="completed", details=ingest_res)
             return {
@@ -417,17 +867,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/analyze/run",
         tags=["Analysis"],
-        dependencies=[Depends(require_api_key)],
     )
     def run_analysis(
         payload: AnalyzeRunRequest,
         background_tasks: BackgroundTasks,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
     ) -> Any:
         """3. Run ABSA analysis and InsightEngine on a scenario (sync or async)."""
+        assert_shop_access(principal, payload.scenario_tag)
+        rate_limiter.check(f"analyze:{principal.email}", max_requests=20, window_seconds=60)
         _validate_analyzer_method(payload.analyzer_method)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="analyze_run",
+            scenario_tag=payload.scenario_tag,
             details={
                 "scenario_tag": payload.scenario_tag,
                 "analyzer_method": payload.analyzer_method,
@@ -437,19 +890,21 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
         if payload.async_mode:
-            background_tasks.add_task(
-                _execute_analysis_task,
+            queue_backend = enqueue_background_job(
+                task_run_analysis,
+                background_tasks,
                 job_id=job_id,
                 scenario_tag=payload.scenario_tag,
                 analyzer_method=payload.analyzer_method,
                 min_n=payload.min_n,
-                db=db,
+                db_path=resolved_db_path,
             )
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
                 content={
                     "job_id": job_id,
                     "scenario_tag": payload.scenario_tag,
+                    "queue_backend": queue_backend,
                     "status": "running",
                     "message": (
                         "Analysis started in background. Poll /api/v1/jobs/{job_id} for progress."
@@ -488,20 +943,31 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/jobs/{job_id}",
         tags=["System"],
-        dependencies=[Depends(require_api_key)],
     )
-    def get_job_status(job_id: int) -> dict[str, Any]:
+    def get_job_status(
+        job_id: int,
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
         """4. Query audit status of a background or synchronous job."""
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             row = conn.execute("SELECT * FROM system_jobs_audit WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        details = json.loads(row["details"] or "{}")
+        job_scenario = (
+            row["scenario_tag"]
+            if "scenario_tag" in row.keys() and row["scenario_tag"]
+            else details.get("scenario_tag")
+        )
+        if job_scenario:
+            assert_shop_access(principal, str(job_scenario))
         return {
             "job_id": int(row["id"]),
             "job_type": str(row["job_type"]),
+            "scenario_tag": job_scenario,
             "status": str(row["status"]),
-            "details": json.loads(row["details"] or "{}"),
+            "details": details,
             "created_at": row["created_at"],
             "completed_at": row["completed_at"],
         }
@@ -510,13 +976,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/stats/overview",
         tags=["Analytics"],
-        dependencies=[Depends(require_api_key)],
     )
     def get_overview_stats(
         scenario_tag: str = Query(default="real_shop"),
         min_n: int = Query(default=3),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """5. Return executive KPIs, Wilson 95% CI aspect stats, and platform comparison."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             total_row = conn.execute(
@@ -583,14 +1050,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/insights",
         tags=["Insights"],
-        dependencies=[Depends(require_api_key)],
     )
     def list_insights(
         scenario_tag: str = Query(default="real_shop"),
         kind: str | None = Query(default=None),
         include_archived: bool = Query(default=False),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """6. Retrieve numerically verified Insights for a scenario."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         arch_clause = "" if include_archived else " AND COALESCE(is_archived, 0) = 0"
         with db.get_connection(read_only=True) as conn:
@@ -630,10 +1098,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/actions/generate",
         tags=["Actions"],
-        dependencies=[Depends(require_api_key)],
     )
-    def generate_actions(payload: ActionGenerateRequest) -> dict[str, Any]:
+    def generate_actions(
+        payload: ActionGenerateRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
         """7. Execute the P1 State-Graph (Planner <-> HybridCritic) to generate grounded actions."""
+        assert_shop_access(principal, payload.scenario_tag)
+        rate_limiter.check(f"actions_gen:{principal.email}", max_requests=20, window_seconds=60)
         db = _get_db()
         trace_raw = Path(os.getenv("ECOMREVIEW_TRACE_DIR", "results/traces"))
         trace_dir = trace_raw if trace_raw.is_absolute() else (_PROJECT_ROOT / trace_raw)
@@ -650,15 +1122,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/actions",
         tags=["Actions"],
-        dependencies=[Depends(require_api_key)],
     )
     def list_actions(
         scenario_tag: str = Query(default="real_shop"),
         is_marketing: bool | None = Query(default=None),
         status: str | None = Query(default=None),
         include_archived: bool = Query(default=False),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """8. Retrieve persisted ActionProposals and their HybridCritic traces."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         query = "SELECT * FROM actions WHERE scenario_tag = ?"
         params: list[Any] = [scenario_tag]
@@ -701,6 +1174,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 else r["critic_trace"],
                 "status": str(r["status"]),
                 "is_archived": bool(r["is_archived"]) if "is_archived" in r.keys() else False,
+                "implemented_at": (
+                    str(r["implemented_at"])
+                    if "implemented_at" in r.keys() and r["implemented_at"]
+                    else None
+                ),
                 "created_at": r["created_at"],
             }
             for r in rows
@@ -711,11 +1189,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/actions/{action_id}/decision",
         tags=["Actions"],
-        dependencies=[Depends(require_api_key)],
     )
     def submit_action_decision(
         action_id: int,
         payload: ActionDecisionRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
         reviewer: str = Depends(get_current_reviewer),
     ) -> dict[str, Any]:
         """9. Record Human Approval Gate decision with edit distance and reviewer identity."""
@@ -727,9 +1205,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
             )
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
-            exists = conn.execute("SELECT id FROM actions WHERE id = ?", (action_id,)).fetchone()
+            exists = conn.execute(
+                "SELECT id, scenario_tag FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
         if not exists:
             raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+        assert_shop_access(principal, str(exists["scenario_tag"]))
 
         result = db.record_action_decision(
             action_id=action_id,
@@ -741,11 +1222,36 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
         return result
 
+    @app.post(
+        "/api/v1/actions/{action_id}/implemented",
+        tags=["Actions"],
+    )
+    def mark_action_implemented(
+        action_id: int,
+        payload: ActionImplementedRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Record actual rollout date on an approved action for Pre/Post impact measurement."""
+        db = _get_db()
+        with db.get_connection(read_only=True) as conn:
+            exists = conn.execute(
+                "SELECT id, scenario_tag FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+        assert_shop_access(principal, str(exists["scenario_tag"]))
+        updated = db.mark_action_implemented(
+            action_id=action_id,
+            implemented_at=payload.implemented_at,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Action {action_id} not found")
+        return updated
+
     # 10. Reviews Exploration (with batch opinions query - N+1 fix)
     @app.get(
         "/api/v1/reviews",
         tags=["Reviews"],
-        dependencies=[Depends(require_api_key)],
     )
     def query_reviews(
         scenario_tag: str = Query(default="real_shop"),
@@ -757,8 +1263,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         ),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """10. Query customer reviews and their extracted ABSA opinions with pagination."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             if review_ids:
@@ -902,15 +1410,19 @@ def create_app(db_path: str | None = None) -> FastAPI:
             reviews_out = []
             for r in rows:
                 rid = str(r["review_id"])
+                rep_st = reply_status_map.get(rid, "NONE")
+                rating_val = int(r["rating"] or 5)
+                created_val = str(r["created_at"]) if r["created_at"] else None
                 reviews_out.append(
                     {
                         "review_id": rid,
                         "platform": str(r["platform"]),
-                        "rating": int(r["rating"] or 5),
+                        "rating": rating_val,
                         "text_raw": str(r["text_raw"]),
-                        "created_at": str(r["created_at"]) if r["created_at"] else None,
+                        "created_at": created_val,
                         "overall_sentiment": str(r["overall_sentiment"] or "neutral"),
-                        "reply_status": reply_status_map.get(rid, "NONE"),
+                        "reply_status": rep_st,
+                        "sla_overdue": _is_sla_overdue(rating_val, rep_st, created_val),
                         "latest_reply": latest_reply_map.get(rid),
                         "opinions": opinions_map.get(rid, []),
                     }
@@ -927,15 +1439,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/trends",
         tags=["Analytics"],
-        dependencies=[Depends(require_api_key)],
     )
     def get_trends(
         scenario_tag: str = Query(default="real_shop"),
         aspect: str | None = Query(default=None),
         period: str = Query(default="month", description="'month' or 'week'"),
         min_n: int = Query(default=3),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """11. Query historical sentiment trends grouped by week or month with Wilson 95% CI."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         trend = get_aspect_trend(
             scenario_tag=scenario_tag,
@@ -956,7 +1469,6 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/alerts",
         tags=["Analytics"],
-        dependencies=[Depends(require_api_key)],
     )
     def get_alerts(
         scenario_tag: str = Query(default="real_shop"),
@@ -964,8 +1476,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         baseline_periods: int = Query(default=3),
         min_n: int = Query(default=5),
         min_delta_pp: float = Query(default=10.0),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """12. Detect statistical spike alerts based on two-proportion one-sided z-test."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         alerts = detect_trend_alerts(
             scenario_tag=scenario_tag,
@@ -985,15 +1499,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/reviews/{review_id}/reply-draft",
         tags=["Customer Care"],
-        dependencies=[Depends(require_api_key)],
     )
     def create_reply_draft(
         review_id: str,
         scenario_tag: str = Query(default="real_shop"),
         mode: str = Query(default="template", description="'template' or 'llm'"),
+        principal: AuthPrincipal = Depends(get_current_principal),
         reviewer: str = Depends(get_current_reviewer),
     ) -> dict[str, Any]:
         """13. Generate, verify, and persist a policy-compliant customer service reply draft."""
+        assert_shop_access(principal, scenario_tag)
         norm_mode = mode.strip().lower()
         if norm_mode not in {"template", "llm"}:
             raise HTTPException(
@@ -1027,13 +1542,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/reviews/{review_id}/replies",
         tags=["Customer Care"],
-        dependencies=[Depends(require_api_key)],
     )
     def get_review_replies(
         review_id: str,
         scenario_tag: str = Query(default="real_shop"),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """17. Retrieve persisted customer service reply drafts for a review."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         replies = db.list_review_replies(review_id=review_id, scenario_tag=scenario_tag)
         return {
@@ -1046,11 +1562,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post(
         "/api/v1/reviews/replies/{reply_id}/status",
         tags=["Customer Care"],
-        dependencies=[Depends(require_api_key)],
     )
     def update_reply_status(
         reply_id: int,
         payload: ReviewReplyStatusRequest,
+        principal: AuthPrincipal = Depends(get_current_principal),
         reviewer: str = Depends(get_current_reviewer),
     ) -> dict[str, Any]:
         """18. Transition a customer reply draft status (DRAFT -> APPROVED -> SENT)."""
@@ -1072,6 +1588,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             ).fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail=f"Reply {reply_id} not found")
+            assert_shop_access(principal, str(existing["scenario_tag"]))
             neg_rows = conn.execute(
                 "SELECT DISTINCT aspect FROM opinions "
                 "WHERE review_id = ? AND scenario_tag = ? AND polarity = 'negative'",
@@ -1128,16 +1645,23 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/actions/{action_id}/impact",
         tags=["Actions"],
-        dependencies=[Depends(require_api_key)],
     )
     def measure_action_impact(
         action_id: int,
         window_days: int = Query(default=30, ge=1, le=365),
         since: str | None = Query(default=None),
         min_n: int = Query(default=3, ge=1, le=1000),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> dict[str, Any]:
         """14. Measure pre vs post intervention sentiment for aspects targeted by action."""
         db = _get_db()
+        with db.get_connection(read_only=True) as conn:
+            act_row = conn.execute(
+                "SELECT scenario_tag FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
+        if not act_row:
+            raise HTTPException(status_code=404, detail=f"Action {action_id} not found.")
+        assert_shop_access(principal, str(act_row["scenario_tag"]))
         impact = get_action_impact(
             action_id=action_id,
             window_days=window_days,
@@ -1153,13 +1677,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get(
         "/api/v1/reports/export",
         tags=["Reports"],
-        dependencies=[Depends(require_api_key)],
     )
     def export_report(
         scenario_tag: str = Query(default="real_shop"),
         format: str = Query(default="xlsx", description="'xlsx' or 'html'"),
+        principal: AuthPrincipal = Depends(get_current_principal),
     ) -> Response:
         """15. Export executive multi-tab Excel workbook (.xlsx) or printable HTML report."""
+        assert_shop_access(principal, scenario_tag)
         db = _get_db()
         fmt = format.strip().lower()
         safe_tag = re.sub(r"[^a-zA-Z0-9_\-]", "_", scenario_tag)[:64]

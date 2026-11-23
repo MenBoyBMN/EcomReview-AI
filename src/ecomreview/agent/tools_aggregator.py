@@ -495,8 +495,14 @@ def get_action_impact(
         ).fetchone()
 
     scenario_tag = str(act_row["scenario_tag"])
+    impl_at = (
+        str(act_row["implemented_at"])[:10]
+        if "implemented_at" in act_row.keys() and act_row["implemented_at"]
+        else None
+    )
     milestone_raw = (
         since
+        or impl_at
         or (str(dec_row["decided_at"])[:10] if dec_row and dec_row["decided_at"] else None)
         or (str(act_row["created_at"])[:10] if act_row["created_at"] else None)
     )

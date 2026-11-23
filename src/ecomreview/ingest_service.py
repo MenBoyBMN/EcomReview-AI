@@ -8,6 +8,7 @@ import io
 import logging
 import re
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_UPLOAD_ROWS = 1000
+MAX_ASYNC_UPLOAD_ROWS = 5000
 
 _COLUMN_ALIASES: dict[str, set[str]] = {
     "review_id": {
@@ -32,7 +34,10 @@ _COLUMN_ALIASES: dict[str, set[str]] = {
         "ma don hang",
         "order_id",
         "order id",
+        "order sn",
+        "order number",
         "review id",
+        "comment id",
     },
     "text": {
         "text",
@@ -42,7 +47,11 @@ _COLUMN_ALIASES: dict[str, set[str]] = {
         "noi dung",
         "noi dung danh gia",
         "danh gia",
+        "danh gia cua nguoi mua",
         "review",
+        "review text",
+        "review content",
+        "buyer comment",
         "content",
     },
     "rating": {
@@ -52,12 +61,35 @@ _COLUMN_ALIASES: dict[str, set[str]] = {
         "so sao",
         "danh gia sao",
         "diem",
+        "diem danh gia",
         "score",
+        "buyer rating",
+        "rating star",
+        "product rating",
     },
-    "platform": {"platform", "san", "kenh", "channel"},
-    "shop": {"shop", "gian hang", "store"},
-    "product": {"product", "ten san pham", "san pham", "sku"},
-    "created_at": {"created_at", "date", "ngay", "ngay danh gia", "thoi gian"},
+    "platform": {"platform", "san", "kenh", "channel", "kenh ban"},
+    "shop": {"shop", "gian hang", "store", "shop name", "ten shop"},
+    "product": {
+        "product",
+        "ten san pham",
+        "san pham",
+        "sku",
+        "product name",
+        "item name",
+        "phan loai hang",
+        "variation",
+    },
+    "created_at": {
+        "created_at",
+        "date",
+        "ngay",
+        "ngay danh gia",
+        "thoi gian",
+        "thoi gian danh gia",
+        "review time",
+        "review date",
+        "create time",
+    },
 }
 
 
@@ -108,6 +140,7 @@ def parse_review_file(
     default_platform: str = "shopee",
     default_shop: str = "shop_aomua",
     default_product: str = "ao_mua_da_ca",
+    max_rows: int = MAX_UPLOAD_ROWS,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Parse an uploaded .csv or .xlsx review batch into valid records and skipped rows."""
     if len(content) > MAX_UPLOAD_FILE_BYTES:
@@ -155,8 +188,8 @@ def parse_review_file(
         )
 
     data_rows = non_empty_rows[1:]
-    if len(data_rows) > MAX_UPLOAD_ROWS:
-        raise ValueError(f"Số lượng dòng vượt quá giới hạn tối đa {MAX_UPLOAD_ROWS} dòng/lần tải.")
+    if len(data_rows) > max_rows:
+        raise ValueError(f"Số lượng dòng vượt quá giới hạn tối đa {max_rows} dòng/lần tải.")
 
     valid_reviews: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
@@ -215,6 +248,7 @@ def ingest_review_batch(
     reviews: list[dict[str, Any]],
     scenario_tag: str = "real_shop",
     analyzer_method: str = "a1_gemini_v2",
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Process, sanitize, analyze, and upsert a batch of customer reviews into database.
 
@@ -340,6 +374,8 @@ def ingest_review_batch(
             created_at=str(created_at) if created_at else None,
         )
         inserted += 1
+        if progress_callback is not None:
+            progress_callback(inserted, len(reviews))
 
     if fallback_triggered:
         actual_method = f"{analyzer_method}+b1_fallback"

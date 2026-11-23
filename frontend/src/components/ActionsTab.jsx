@@ -37,6 +37,7 @@ import DecisionModal from './DecisionModal';
 export default function ActionsTab({
   scenarioTag,
   actions = [],
+  userRole = 'owner',
   includeArchived = false,
   onToggleIncludeArchived,
   onRefreshActions,
@@ -69,9 +70,27 @@ export default function ActionsTab({
 
   const getActionSinceDate = (act) =>
     sinceDateMap[act.id] ??
-    (act.created_at
+    (act.implemented_at
+      ? String(act.implemented_at).slice(0, 10)
+      : act.created_at
       ? String(act.created_at).slice(0, 10)
       : new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10));
+
+  const handleMarkImplemented = async (act) => {
+    try {
+      setSubmittingDecision(true);
+      const res = await api.markActionImplemented(act.id);
+      await onRefreshActions();
+      showToast(
+        `Đã ghi nhận ngày triển khai thực tế (${res.implemented_at}) cho hành động #${act.id}!`,
+        'success'
+      );
+    } catch (err) {
+      showToast(err.message || 'Không thể đánh dấu ngày triển khai', 'error');
+    } finally {
+      setSubmittingDecision(false);
+    }
+  };
 
   const toggleExpand = (id) => {
     setExpandedIds((prev) => {
@@ -204,15 +223,17 @@ export default function ActionsTab({
           title="Đề xuất hành động cụ thể cho Shop"
           subtitle="Mỗi việc cần làm đều được sắp xếp theo mức độ ưu tiên, có hạn hoàn thành và gắn kèm đánh giá thực tế của khách hàng"
           actions={
-            <Button
-              variant="primary"
-              size="md"
-              disabled={generating}
-              onClick={handleGenerateStateGraph}
-            >
-              <Sparkles className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-              <span>{generating ? 'Đang lập kế hoạch...' : 'Tạo kế hoạch mới'}</span>
-            </Button>
+            userRole !== 'cskh' && (
+              <Button
+                variant="primary"
+                size="md"
+                disabled={generating}
+                onClick={handleGenerateStateGraph}
+              >
+                <Sparkles className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                <span>{generating ? 'Đang lập kế hoạch...' : 'Tạo kế hoạch mới'}</span>
+              </Button>
+            )
           }
         />
 
@@ -384,40 +405,57 @@ export default function ActionsTab({
                     )}
                   </div>
 
-                  {/* Approval Gate Buttons */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      variant="success"
-                      size="sm"
-                      disabled={submittingDecision}
-                      onClick={() => handleQuickApprove(act.id)}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Duyệt</span>
-                    </Button>
+                  {/* Approval Gate Buttons (Owner / Admin only) */}
+                  {userRole !== 'cskh' && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(statusUpper === 'APPROVED' || statusUpper === 'EDITED') &&
+                        !act.implemented_at && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={submittingDecision}
+                            onClick={() => handleMarkImplemented(act)}
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Đánh dấu đã triển khai</span>
+                          </Button>
+                        )}
+                      {act.implemented_at && (
+                        <Badge tone="info">Triển khai: {act.implemented_at}</Badge>
+                      )}
+                      <Button
+                        variant="success"
+                        size="sm"
+                        disabled={submittingDecision}
+                        onClick={() => handleQuickApprove(act.id)}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Duyệt</span>
+                      </Button>
 
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        setDecisionModal({ isOpen: true, actionItem: act, mode: 'EDITED' })
-                      }
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                      <span>Sửa</span>
-                    </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setDecisionModal({ isOpen: true, actionItem: act, mode: 'EDITED' })
+                        }
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Sửa</span>
+                      </Button>
 
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() =>
-                        setDecisionModal({ isOpen: true, actionItem: act, mode: 'REJECTED' })
-                      }
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      <span>Từ chối</span>
-                    </Button>
-                  </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() =>
+                          setDecisionModal({ isOpen: true, actionItem: act, mode: 'REJECTED' })
+                        }
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Từ chối</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Expanded 4-Pillar Detail + Pre/Post Impact Measurement */}
