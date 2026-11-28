@@ -6,9 +6,10 @@ import hashlib
 import hmac
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
-from ecomreview.alerts.notifier import dispatch_alert, notify_critical_reviews
+from ecomreview.alerts.notifier import dispatch_alert, notify_critical_reviews, send_webhook_alert
 from ecomreview.api.main import create_app
 from ecomreview.db.database import DatabaseManager
 
@@ -59,9 +60,10 @@ class TestOutboundAlerting:
         assert "0912345678" not in tg_kwargs["json"]["text"]
         assert "khach@example.com" not in tg_kwargs["json"]["text"]
 
-        # Verify HMAC-SHA256 signature on webhook
+        # Verify HMAC-SHA256 signature and redirect-blocking on webhook
         wh_url, wh_kwargs = captured_calls[1]
         assert wh_url == "https://hooks.example.test/ecom"
+        assert wh_kwargs.get("allow_redirects") is False
         expected_sig = hmac.new(
             shop["webhook_secret"].encode("utf-8"),
             wh_kwargs["data"],
@@ -129,6 +131,31 @@ class TestOutboundAlerting:
             [{"review_id": "ok_5", "rating": 5, "text": "Rất tốt"}],
         )
         assert out == []
+
+    @pytest.mark.parametrize(
+        "bad_url",
+        [
+            "http://hooks.example.com/ecom",
+            "http://127.0.0.1:8000/api/v1/health",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://10.0.0.5/internal-hook",
+            "https://localhost/hook",
+            "https://redis:6379/",
+        ],
+    )
+    def test_ssrf_blocks_internal_and_insecure_webhook_urls(self, tmp_path, monkeypatch, bad_url):
+        monkeypatch.setenv("ECOMREVIEW_ENV", "development")
+        app = create_app(db_path=str(tmp_path / "ssrf.db"))
+        client = TestClient(app)
+
+        r = client.patch(
+            "/api/v1/shops/real_shop/alerts",
+            json={"webhook_url": bad_url},
+        )
+        assert r.status_code == 400
+
+        with pytest.raises(ValueError):
+            send_webhook_alert(bad_url, {"ping": True})
 
 
 # CreBy: MenBoyBMN

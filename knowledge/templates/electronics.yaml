@@ -1,0 +1,153 @@
+# Domain Playbook: Phụ Kiện & Điện Tử (Shopee & TikTok Shop)
+domain: "electronics_ecommerce_vn"
+industry: "electronics"
+display_name: "Phụ kiện & Điện tử"
+version: "1.0.0"
+
+aspect_labels:
+  WATERPROOF: "Kháng nước / Chống ẩm mạch"
+  MATERIAL_DURABILITY: "Độ hoàn thiện / Đầu cắm & Dây"
+  FIT_SIZE: "Độ tương thích & Kích cỡ"
+  COMFORT_USABILITY: "Tốc độ sạc / Kết nối & Tiện dụng"
+  PRICE_VALUE: "Giá cả & Hiệu năng"
+  PACKAGING_SHIPPING: "Hộp bảo vệ / Giao hàng"
+  CUSTOMER_SERVICE: "Bảo hành kỹ thuật & CSKH"
+  ACCESSIBILITY_DESIGN: "Thiết kế & Đèn báo"
+
+guardrails:
+  overclaim_keywords:
+    - "chống nước tuyệt đối"
+    - "chống thấm 100%"
+    - "sạc đầy trong 5 phút"
+    - "pin không bao giờ chai"
+    - "bảo hành trọn đời"
+    - "chính hãng apple 100%"
+  prohibited_policy_keywords:
+    - "tặng tiền đổi 5 sao"
+    - "hoàn tiền nếu đánh giá 5 sao"
+    - "xóa đánh giá 1 sao"
+    - "mua hộ đánh giá ảo"
+    - "chuyển khoản ngoài sàn"
+    - "zalo cá nhân để nhận hoàn tiền"
+  deadline_keywords:
+    - "giờ"
+    - "ngày"
+    - "tuần"
+    - "24h"
+    - "48h"
+    - "72h"
+    - "ngay"
+    - "trong vòng"
+
+playbook_rules:
+  - rule_id: "EL_01"
+    aspect: "MATERIAL_DURABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "PRODUCT_FIX"
+    is_marketing: false
+    title: "Test tải điện và kiểm tra tiếp xúc đầu cắm Type-C/Lightning trước khi xuất kho"
+    what_to_do: "Dùng đồng hồ đo dòng kiểm tra ngẫu nhiên đầu sạc/cáp theo lô và kiểm tra độ chắc chắn của đầu bọc chống gãy gập trước khi đóng hộp."
+    how_and_when: "Thực hiện kiểm định kỹ thuật tại kho trong vòng 48h."
+    success_metric: "Giảm tỷ lệ lỗi chập chờn hoặc không nhận sạc xuống dưới 2% trong 14 ngày."
+    effort: "MEDIUM"
+    impact: "HIGH"
+
+  - rule_id: "EL_02"
+    aspect: "FIT_SIZE"
+    trigger: "TOP_PAIN"
+    action_type: "LISTING_UPDATE"
+    is_marketing: true
+    title: "Cập nhật bảng danh sách dòng máy tương thích chi tiết trên ảnh sản phẩm"
+    what_to_do: "Liệt kê rõ cổng kết nối (USB-C, Lightning, Jack 3.5mm), chuẩn công suất và danh sách dòng điện thoại/laptop tương thích để tránh khách đặt nhầm."
+    how_and_when: "Chỉnh sửa ảnh bảng tương thích và mô tả trên Shopee/TikTok trong vòng 24h."
+    success_metric: "Giảm 35% đơn hoàn trả do chọn sai cổng kết nối trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "EL_03"
+    aspect: "COMFORT_USABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "CUSTOMER_CARE"
+    is_marketing: true
+    title: "Đính kèm thẻ hướng dẫn kết nối Bluetooth và kích hoạt chế độ sạc nhanh"
+    what_to_do: "Đặt thẻ hướng dẫn 3 bước reset thiết bị, ghép nối Bluetooth và lưu ý sử dụng củ sạc đúng chuẩn công suất ngay trong hộp."
+    how_and_when: "In và kẹp vào đơn hàng xuất kho trong vòng 48h."
+    success_metric: "Giảm 40% khiếu nại nhầm tưởng thiết bị không lên nguồn hoặc sạc chậm trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "EL_04"
+    aspect: "WATERPROOF"
+    trigger: "TOP_PAIN"
+    action_type: "LISTING_UPDATE"
+    is_marketing: true
+    title: "Ghi rõ chuẩn kháng nước IP thực tế và cảnh báo không ngâm nước sâu"
+    what_to_do: "Giải thích minh bạch phạm vi kháng mồ hôi/mưa nhẹ của phụ kiện để tránh khách hiểu nhầm khả năng ngâm nước."
+    how_and_when: "Cập nhật mô tả kỹ thuật trên gian hàng trong vòng 24h."
+    success_metric: "Giảm 30% tranh chấp bảo hành liên quan tới vào nước sau 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "EL_05"
+    aspect: "PACKAGING_SHIPPING"
+    trigger: "TOP_PAIN"
+    action_type: "OPS"
+    is_marketing: false
+    title: "Dán tem bảo hành kích hoạt theo mã đơn hàng và bọc chống sốc 2 lớp"
+    what_to_do: "Sử dụng túi bóng khí dày bảo vệ hộp phụ kiện điện tử và dán tem serial rõ ràng để thuận tiện tra cứu bảo hành."
+    how_and_when: "Triển khai tại bàn đóng gói trong vòng 24h."
+    success_metric: "Giảm tỷ lệ móp hộp và thất lạc phụ kiện xuống dưới 1% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "EL_06"
+    aspect: "ACCESSIBILITY_DESIGN"
+    trigger: "STRENGTH"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Quay video test thực tế công suất sạc và thiết kế nhỏ gọn trên bàn làm việc"
+    what_to_do: "Biên tập video đo dòng thực tế và cận cảnh hoàn thiện sản phẩm nhằm tăng uy tín công nghệ và tỷ lệ chốt đơn."
+    how_and_when: "Quay và ghim video lên trang sản phẩm trong vòng 48h."
+    success_metric: "Tăng tỷ lệ chuyển đổi (CR) thêm 1.5% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "EL_07"
+    aspect: "PRICE_VALUE"
+    trigger: "TOP_PAIN"
+    action_type: "PROMOTION"
+    is_marketing: true
+    title: "Tạo Combo Củ Sạc + Cáp Truyền Dữ Liệu giá ưu đãi đồng bộ chuẩn công suất"
+    what_to_do: "Gợi ý combo củ và cáp tương thích chuẩn sạc nhanh để khách đạt hiệu năng tối ưu với mức giá tiết kiệm hơn mua rời."
+    how_and_when: "Thiết lập Mua kèm Deal sốc trên sàn trong vòng 24h."
+    success_metric: "Tăng giá trị đơn hàng trung bình (AOV) thêm 18% trong 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "EL_08"
+    aspect: "CUSTOMER_SERVICE"
+    trigger: "TOP_PAIN"
+    action_type: "REVIEW_REPLY"
+    is_marketing: true
+    title: "Kích hoạt đổi mới bảo hành lỗi kỹ thuật 1-1 nhanh chóng cho đánh giá 1-3 sao"
+    what_to_do: "Hướng dẫn khách quay clip ngắn kiểm tra lỗi qua Chat của sàn và xử lý gửi đổi mới ngay để giữ uy tín gian hàng công nghệ."
+    how_and_when: "Phản hồi toàn bộ đánh giá lỗi kỹ thuật trong vòng 24h."
+    success_metric: "Đạt 100% tỷ lệ xử lý khiếu nại kỹ thuật trong 24h."
+    effort: "LOW"
+    impact: "HIGH"
+
+reply_templates:
+  greeting: "Dạ Gian hàng Phụ Kiện Công Nghệ xin chân thành cảm ơn Quý khách đã tin tưởng ủng hộ."
+  aspect_handlers:
+    WATERPROOF: "Về chuẩn kháng nước và chống ẩm, Shop xin ghi nhận phản hồi để tư vấn rõ giới hạn sử dụng an toàn và hỗ trợ kiểm tra qua Chat sàn ạ."
+    MATERIAL_DURABILITY: "Về độ bền hoàn thiện dây cáp và đầu cắm, Shop rất tiếc nếu có lỗi tiếp xúc và sẵn sàng hỗ trợ bảo hành đổi mới 1-1 qua kênh Chat của sàn."
+    FIT_SIZE: "Về kích cỡ và độ tương thích cổng kết nối với thiết bị, Shop xin hỗ trợ kiểm tra đúng chuẩn dòng máy và đổi phân loại phù hợp cho Quý khách."
+    COMFORT_USABILITY: "Về tốc độ kết nối và sự tiện dụng khi thao tác, đội ngũ kỹ thuật của Shop sẵn sàng gửi hướng dẫn thiết lập nhanh qua Chat ngay ạ."
+    PRICE_VALUE: "Shop luôn cam kết cung cấp phụ kiện đạt chuẩn an toàn nguồn điện với mức giá hợp lý và chế độ bảo hành minh bạch."
+    PACKAGING_SHIPPING: "Về khâu đóng gói hộp bảo vệ và thời gian giao hàng, Shop thành thật xin lỗi nếu có móp méo khi vận chuyển và sẵn sàng hỗ trợ ngay."
+    CUSTOMER_SERVICE: "Shop xin lỗi vì sự chậm trễ trong lúc hỗ trợ kỹ thuật chăm sóc khách hàng và cam kết phản hồi nhanh qua tin nhắn chính thức của sàn."
+    ACCESSIBILITY_DESIGN: "Shop cảm ơn góp ý quý báu về kiểu dáng, màu sắc và đèn báo để hoàn thiện các phiên bản phụ kiện tinh gọn hơn."
+    GENERAL: "Shop đã ghi nhận phản hồi của Quý khách và luôn sẵn sàng hỗ trợ bảo hành kỹ thuật qua cổng Chat của sàn trong vòng 24h ạ."
+  closing: "Chúc Quý khách luôn có những trải nghiệm công nghệ mượt mà, ổn định và hài lòng!"
+
+# CreBy: MenBoyBMN

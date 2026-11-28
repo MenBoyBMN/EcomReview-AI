@@ -100,21 +100,47 @@ def get_current_principal(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Vai trò tài khoản không hợp lệ.",
             )
+        uid = int(claims["sub"]) if str(claims.get("sub", "")).isdigit() else None
+        allowed_shops = [str(s) for s in (claims.get("allowed_shops") or [])]
+        full_name = str(claims.get("name") or claims["email"])
+        email = str(claims["email"])
+
+        db = getattr(request.app.state, "db", None)
+        if db is not None and uid is not None:
+            db_user = db.get_user_by_id(uid)
+            token_tv = int(claims.get("tv", 1))
+            if (
+                not db_user
+                or not db_user.get("is_active")
+                or int(db_user.get("token_version") or 1) != token_tv
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=(
+                        "Phiên đăng nhập đã bị thu hồi hoặc vô hiệu hóa. Vui lòng đăng nhập lại."
+                    ),
+                )
+            role = str(db_user.get("role") or role).lower()
+            allowed_shops = [str(s) for s in (db_user.get("allowed_shops") or [])]
+            full_name = str(db_user.get("full_name") or full_name)
+            email = str(db_user.get("email") or email)
+
         principal = AuthPrincipal(
-            user_id=int(claims["sub"]) if str(claims.get("sub", "")).isdigit() else None,
-            email=str(claims["email"]),
-            full_name=str(claims.get("name") or claims["email"]),
+            user_id=uid,
+            email=email,
+            full_name=full_name,
             role=role,
-            allowed_shops=[str(s) for s in (claims.get("allowed_shops") or [])],
+            allowed_shops=allowed_shops,
             auth_type="jwt",
         )
         request.state.principal = principal
         return principal
 
-    # 2. Try X-API-Key (machine-to-machine, scripts, or legacy client)
+    # 2. Try X-API-Key (global key or scoped per-shop key)
     expected_key = os.getenv("ECOMREVIEW_API_KEY", "").strip()
-    if expected_key:
-        if x_api_key and secrets.compare_digest(x_api_key.strip(), expected_key):
+    if x_api_key and x_api_key.strip():
+        clean_key = x_api_key.strip()
+        if expected_key and secrets.compare_digest(clean_key, expected_key):
             reviewer = _sanitize_reviewer_name(x_reviewer)
             principal = AuthPrincipal(
                 user_id=None,
@@ -126,6 +152,28 @@ def get_current_principal(
             )
             request.state.principal = principal
             return principal
+
+        db = getattr(request.app.state, "db", None)
+        if db is not None:
+            key_row = db.verify_shop_api_key(clean_key)
+            if key_row is not None:
+                principal = AuthPrincipal(
+                    user_id=None,
+                    email=f"apikey:{key_row['key_prefix']}",
+                    full_name=str(key_row["name"]),
+                    role=str(key_row["role"]),
+                    allowed_shops=[str(key_row["scenario_tag"])],
+                    auth_type="shop_api_key",
+                )
+                request.state.principal = principal
+                return principal
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-API-Key header.",
+        )
+
+    if expected_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-API-Key header.",

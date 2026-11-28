@@ -4,6 +4,7 @@ import {
   Lightbulb,
   Megaphone,
   MessageSquareText,
+  Building2,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -12,6 +13,12 @@ export const NAV_ITEMS = [
     label: 'Tổng quan',
     pageTitle: 'Tổng quan gian hàng',
     icon: LayoutDashboard,
+  },
+  {
+    id: 'executive',
+    label: 'Đa gian hàng',
+    pageTitle: 'Điều hành chuỗi gian hàng (Agency)',
+    icon: Building2,
   },
   {
     id: 'insights',

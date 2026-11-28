@@ -40,6 +40,27 @@ def _confidence_tier(n: int) -> str:
     return "low"
 
 
+def _daily_metrics_in_sync(conn: Any, scenario_tag: str) -> bool:
+    """Return True when daily_aspect_metrics exists and matches total opinions count."""
+    try:
+        agg_row = conn.execute(
+            "SELECT COALESCE(SUM(total_count), 0) AS agg_sum "
+            "FROM daily_aspect_metrics WHERE scenario_tag = ?",
+            (scenario_tag,),
+        ).fetchone()
+        agg_sum = int(agg_row["agg_sum"] or 0) if agg_row else 0
+        if agg_sum <= 0:
+            return False
+        op_row = conn.execute(
+            "SELECT COUNT(*) AS op_cnt FROM opinions WHERE scenario_tag = ?",
+            (scenario_tag,),
+        ).fetchone()
+        op_cnt = int(op_row["op_cnt"] or 0) if op_row else 0
+        return agg_sum == op_cnt
+    except Exception:
+        return False
+
+
 def get_aspect_sentiment_stats(
     scenario_tag: str = "real_shop",
     platform: str | None = None,
@@ -49,37 +70,61 @@ def get_aspect_sentiment_stats(
 ) -> list[dict[str, Any]]:
     """Query aspect sentiment counts, percentages, and Wilson 95% CI (Read-Only)."""
     db_mgr = db or DatabaseManager()
-    filters = ["o.scenario_tag = ?"]
-    params: list[Any] = [scenario_tag]
-
-    if platform:
-        filters.append("r.platform = ?")
-        params.append(platform)
-    if product:
-        filters.append("r.product = ?")
-        params.append(product)
-
-    where_sql = " AND ".join(filters)
-    sql = f"""
-        SELECT
-            o.aspect AS aspect,
-            SUM(CASE WHEN o.polarity = 'positive' THEN 1 ELSE 0 END) AS pos_count,
-            SUM(CASE WHEN o.polarity = 'negative' THEN 1 ELSE 0 END) AS neg_count,
-            SUM(CASE WHEN o.polarity = 'neutral' THEN 1 ELSE 0 END) AS neu_count,
-            COUNT(*) AS total
-        FROM opinions o
-        JOIN reviews r
-          ON o.review_id = r.review_id AND o.scenario_tag = r.scenario_tag
-        WHERE {where_sql} AND o.aspect != 'GENERAL'
-        GROUP BY o.aspect
-        HAVING COUNT(*) >= ?
-        ORDER BY neg_count DESC, total DESC
-    """
-    params.append(min_n)
-
     stats: list[dict[str, Any]] = []
     with db_mgr.get_connection(read_only=True) as conn:
-        rows = conn.execute(sql, params).fetchall()
+        if not product and _daily_metrics_in_sync(conn, scenario_tag):
+            m_filters = ["scenario_tag = ?", "aspect != 'GENERAL'"]
+            m_params: list[Any] = [scenario_tag]
+            if platform:
+                m_filters.append("platform = ?")
+                m_params.append(platform.strip().lower())
+            m_where = " AND ".join(m_filters)
+            rows = conn.execute(
+                f"""
+                SELECT
+                    aspect,
+                    SUM(pos_count) AS pos_count,
+                    SUM(neg_count) AS neg_count,
+                    SUM(neu_count) AS neu_count,
+                    SUM(total_count) AS total
+                FROM daily_aspect_metrics
+                WHERE {m_where}
+                GROUP BY aspect
+                HAVING SUM(total_count) >= ?
+                ORDER BY neg_count DESC, total DESC
+                """,
+                (*m_params, min_n),
+            ).fetchall()
+        else:
+            filters = ["o.scenario_tag = ?"]
+            params: list[Any] = [scenario_tag]
+
+            if platform:
+                filters.append("r.platform = ?")
+                params.append(platform)
+            if product:
+                filters.append("r.product = ?")
+                params.append(product)
+
+            where_sql = " AND ".join(filters)
+            sql = f"""
+                SELECT
+                    o.aspect AS aspect,
+                    SUM(CASE WHEN o.polarity = 'positive' THEN 1 ELSE 0 END) AS pos_count,
+                    SUM(CASE WHEN o.polarity = 'negative' THEN 1 ELSE 0 END) AS neg_count,
+                    SUM(CASE WHEN o.polarity = 'neutral' THEN 1 ELSE 0 END) AS neu_count,
+                    COUNT(*) AS total
+                FROM opinions o
+                JOIN reviews r
+                  ON o.review_id = r.review_id AND o.scenario_tag = r.scenario_tag
+                WHERE {where_sql} AND o.aspect != 'GENERAL'
+                GROUP BY o.aspect
+                HAVING COUNT(*) >= ?
+                ORDER BY neg_count DESC, total DESC
+            """
+            params.append(min_n)
+            rows = conn.execute(sql, params).fetchall()
+
         for row in rows:
             total = int(row["total"])
             pos_c = int(row["pos_count"])
@@ -223,47 +268,83 @@ def get_aspect_trend(
         Sorted list of period stats with total, negative count, negative pct, and CI.
     """
     db_mgr = db or DatabaseManager()
-    query = """
-        SELECT r.created_at, o.aspect, o.polarity
-        FROM reviews r
-        JOIN opinions o ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
-        WHERE r.scenario_tag = ? AND r.created_at IS NOT NULL AND r.created_at != ''
-    """
-    params: list[Any] = [scenario_tag]
-    if as_of:
-        query += " AND r.created_at <= ?"
-        params.append(str(as_of)[:10])
-    if aspect and aspect != "ALL":
-        query += " AND o.aspect = ?"
-        params.append(aspect)
-
-    with db_mgr.get_connection(read_only=True) as conn:
-        rows = conn.execute(query, tuple(params)).fetchall()
-
     buckets: dict[str, dict[str, int]] = {}
-    for r in rows:
-        raw_dt = str(r["created_at"])[:10]
-        try:
-            dt = datetime.strptime(raw_dt, "%Y-%m-%d")
-        except ValueError:
-            continue
-
-        if period == "week":
-            bucket_key = f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
+    with db_mgr.get_connection(read_only=True) as conn:
+        if _daily_metrics_in_sync(conn, scenario_tag):
+            m_query = """
+                SELECT
+                    metric_date,
+                    SUM(pos_count) AS pos_c,
+                    SUM(neg_count) AS neg_c,
+                    SUM(neu_count) AS neu_c,
+                    SUM(total_count) AS tot_c
+                FROM daily_aspect_metrics
+                WHERE scenario_tag = ? AND metric_date != 'unknown'
+            """
+            m_params: list[Any] = [scenario_tag]
+            if as_of:
+                m_query += " AND metric_date <= ?"
+                m_params.append(str(as_of)[:10])
+            if aspect and aspect != "ALL":
+                m_query += " AND aspect = ?"
+                m_params.append(aspect)
+            m_query += " GROUP BY metric_date"
+            m_rows = conn.execute(m_query, tuple(m_params)).fetchall()
+            for r in m_rows:
+                raw_dt = str(r["metric_date"])[:10]
+                try:
+                    dt = datetime.strptime(raw_dt, "%Y-%m-%d")
+                except ValueError:
+                    continue
+                if period == "week":
+                    bucket_key = f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
+                else:
+                    bucket_key = dt.strftime("%Y-%m")
+                if bucket_key not in buckets:
+                    buckets[bucket_key] = {"total": 0, "pos": 0, "neg": 0, "neu": 0}
+                buckets[bucket_key]["total"] += int(r["tot_c"] or 0)
+                buckets[bucket_key]["pos"] += int(r["pos_c"] or 0)
+                buckets[bucket_key]["neg"] += int(r["neg_c"] or 0)
+                buckets[bucket_key]["neu"] += int(r["neu_c"] or 0)
         else:
-            bucket_key = dt.strftime("%Y-%m")
+            query = """
+                SELECT r.created_at, o.aspect, o.polarity
+                FROM reviews r
+                JOIN opinions o ON r.review_id = o.review_id AND r.scenario_tag = o.scenario_tag
+                WHERE r.scenario_tag = ? AND r.created_at IS NOT NULL AND r.created_at != ''
+            """
+            params: list[Any] = [scenario_tag]
+            if as_of:
+                query += " AND r.created_at <= ?"
+                params.append(str(as_of)[:10])
+            if aspect and aspect != "ALL":
+                query += " AND o.aspect = ?"
+                params.append(aspect)
 
-        if bucket_key not in buckets:
-            buckets[bucket_key] = {"total": 0, "pos": 0, "neg": 0, "neu": 0}
+            rows = conn.execute(query, tuple(params)).fetchall()
+            for r in rows:
+                raw_dt = str(r["created_at"])[:10]
+                try:
+                    dt = datetime.strptime(raw_dt, "%Y-%m-%d")
+                except ValueError:
+                    continue
 
-        pol = str(r["polarity"]).lower()
-        buckets[bucket_key]["total"] += 1
-        if pol == "positive":
-            buckets[bucket_key]["pos"] += 1
-        elif pol == "negative":
-            buckets[bucket_key]["neg"] += 1
-        else:
-            buckets[bucket_key]["neu"] += 1
+                if period == "week":
+                    bucket_key = f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
+                else:
+                    bucket_key = dt.strftime("%Y-%m")
+
+                if bucket_key not in buckets:
+                    buckets[bucket_key] = {"total": 0, "pos": 0, "neg": 0, "neu": 0}
+
+                pol = str(r["polarity"]).lower()
+                buckets[bucket_key]["total"] += 1
+                if pol == "positive":
+                    buckets[bucket_key]["pos"] += 1
+                elif pol == "negative":
+                    buckets[bucket_key]["neg"] += 1
+                else:
+                    buckets[bucket_key]["neu"] += 1
 
     trend_list = []
     for b_key in sorted(buckets.keys()):
@@ -621,6 +702,318 @@ def get_action_impact(
         "disclaimer": (
             "Quan sát đối chứng trước/sau can thiệp; không mang tính quy kết nhân quả tuyệt đối."
         ),
+    }
+
+
+def get_sku_variation_stats(
+    scenario_tag: str = "real_shop",
+    platform: str | None = None,
+    min_n: int = 2,
+    limit: int = 20,
+    db: DatabaseManager | None = None,
+) -> list[dict[str, Any]]:
+    """Aggregate deterministic complaint rate, Wilson 95% CI & anomalies per SKU/variation."""
+    db_mgr = db or DatabaseManager()
+    filters = ["r.scenario_tag = ?"]
+    params: list[Any] = [scenario_tag]
+    if platform:
+        filters.append("r.platform = ?")
+        params.append(platform.strip().lower())
+    where_sql = " AND ".join(filters)
+
+    with db_mgr.get_connection(read_only=True) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT
+                r.product AS product,
+                COALESCE(NULLIF(r.variation, ''), '(Mặc định)') AS variation,
+                COUNT(*) AS total_reviews,
+                AVG(r.rating) AS avg_rating,
+                SUM(
+                    CASE WHEN r.rating <= 2 OR LOWER(COALESCE(r.overall_sentiment, '')) = 'negative'
+                    THEN 1 ELSE 0 END
+                ) AS negative_reviews,
+                SUM(
+                    CASE WHEN COALESCE(r.anomaly_flags, '[]') NOT IN ('', '[]')
+                    THEN 1 ELSE 0 END
+                ) AS anomaly_count
+            FROM reviews r
+            WHERE {where_sql}
+            GROUP BY r.product, COALESCE(NULLIF(r.variation, ''), '(Mặc định)')
+            HAVING COUNT(*) >= ?
+            """,
+            (*params, max(1, int(min_n))),
+        ).fetchall()
+
+        neg_op_rows = conn.execute(
+            """
+            SELECT
+                r.product AS product,
+                COALESCE(NULLIF(r.variation, ''), '(Mặc định)') AS variation,
+                o.aspect AS aspect,
+                COUNT(*) AS cnt
+            FROM opinions o
+            JOIN reviews r
+              ON o.review_id = r.review_id AND o.scenario_tag = r.scenario_tag
+            WHERE o.scenario_tag = ? AND o.polarity = 'negative' AND o.aspect != 'GENERAL'
+            GROUP BY r.product, COALESCE(NULLIF(r.variation, ''), '(Mặc định)'), o.aspect
+            """,
+            (scenario_tag,),
+        ).fetchall()
+
+    top_aspect_map: dict[tuple[str, str], tuple[str, int]] = {}
+    for nrow in neg_op_rows:
+        key = (str(nrow["product"]), str(nrow["variation"]))
+        cnt = int(nrow["cnt"] or 0)
+        if key not in top_aspect_map or cnt > top_aspect_map[key][1]:
+            top_aspect_map[key] = (str(nrow["aspect"]), cnt)
+
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        tot = int(row["total_reviews"] or 0)
+        neg = int(row["negative_reviews"] or 0)
+        neg_pct = round((neg / tot) * 100.0, 1) if tot > 0 else 0.0
+        ci_low, ci_high = wilson_ci_pct(neg, tot)
+        prod_s = str(row["product"])
+        var_s = str(row["variation"])
+        top_asp = top_aspect_map.get((prod_s, var_s), (None, 0))[0]
+        results.append(
+            {
+                "product": prod_s,
+                "variation": var_s,
+                "total_reviews": tot,
+                "avg_rating": round(float(row["avg_rating"] or 0.0), 2),
+                "negative_reviews": neg,
+                "negative_rate_pct": neg_pct,
+                "wilson_ci_low": ci_low,
+                "wilson_ci_high": ci_high,
+                "anomaly_count": int(row["anomaly_count"] or 0),
+                "top_negative_aspect": top_asp,
+            }
+        )
+
+    results.sort(key=lambda x: (-x["negative_rate_pct"], -x["total_reviews"], x["product"]))
+    return results[: max(1, min(100, int(limit)))]
+
+
+def get_executive_multi_shop_summary(
+    shop_slugs: list[str],
+    shop_meta: dict[str, dict[str, Any]] | None = None,
+    db: DatabaseManager | None = None,
+) -> dict[str, Any]:
+    """Compute cross-shop agency executive summary using strict Read-Only analytics tables."""
+    db_mgr = db or DatabaseManager()
+    meta_map = shop_meta or {}
+    unique_slugs = [str(s).strip() for s in dict.fromkeys(shop_slugs) if str(s).strip()]
+
+    if not unique_slugs:
+        return {
+            "portfolio": {
+                "total_shops": 0,
+                "total_reviews": 0,
+                "portfolio_avg_rating": 0.0,
+                "portfolio_neg_rate_pct": 0.0,
+                "portfolio_cskh_sla_pct": 100.0,
+                "total_pending_cskh": 0,
+                "total_pending_actions": 0,
+            },
+            "channel_summary": {
+                "shopee": {"reviews": 0, "avg_rating": 0.0, "neg_rate_pct": 0.0},
+                "tiktok": {"reviews": 0, "avg_rating": 0.0, "neg_rate_pct": 0.0},
+            },
+            "shops": [],
+        }
+
+    ph = ", ".join("?" for _ in unique_slugs)
+    with db_mgr.get_connection(read_only=True) as conn:
+        rev_rows = conn.execute(
+            f"""
+            SELECT
+                scenario_tag,
+                COUNT(*) AS total_reviews,
+                AVG(rating) AS avg_rating,
+                SUM(CASE WHEN overall_sentiment = 'negative' THEN 1 ELSE 0 END) AS neg_reviews,
+                SUM(CASE WHEN platform = 'shopee' THEN 1 ELSE 0 END) AS shopee_reviews,
+                AVG(CASE WHEN platform = 'shopee' THEN rating ELSE NULL END) AS shopee_avg_rating,
+                SUM(
+                    CASE WHEN platform = 'shopee' AND overall_sentiment = 'negative'
+                    THEN 1 ELSE 0 END
+                ) AS shopee_neg,
+                SUM(CASE WHEN platform = 'tiktok' THEN 1 ELSE 0 END) AS tiktok_reviews,
+                AVG(CASE WHEN platform = 'tiktok' THEN rating ELSE NULL END) AS tiktok_avg_rating,
+                SUM(
+                    CASE WHEN platform = 'tiktok' AND overall_sentiment = 'negative'
+                    THEN 1 ELSE 0 END
+                ) AS tiktok_neg,
+                SUM(CASE WHEN rating <= 3 THEN 1 ELSE 0 END) AS low_star_total
+            FROM reviews
+            WHERE scenario_tag IN ({ph})
+            GROUP BY scenario_tag
+            """,
+            tuple(unique_slugs),
+        ).fetchall()
+
+        sla_rows = conn.execute(
+            f"""
+            SELECT r.scenario_tag, COUNT(DISTINCT r.review_id) AS low_star_replied
+            FROM reviews r
+            JOIN review_replies rr
+              ON r.review_id = rr.review_id AND r.scenario_tag = rr.scenario_tag
+            WHERE r.scenario_tag IN ({ph}) AND r.rating <= 3 AND rr.status = 'SENT'
+            GROUP BY r.scenario_tag
+            """,
+            tuple(unique_slugs),
+        ).fetchall()
+
+        act_rows = conn.execute(
+            f"""
+            SELECT scenario_tag, COUNT(*) AS pending_actions
+            FROM actions
+            WHERE scenario_tag IN ({ph})
+              AND COALESCE(is_archived, 0) = 0
+              AND status = 'PENDING'
+            GROUP BY scenario_tag
+            """,
+            tuple(unique_slugs),
+        ).fetchall()
+
+    rev_by_slug = {str(r["scenario_tag"]): r for r in rev_rows}
+    sla_by_slug = {str(r["scenario_tag"]): int(r["low_star_replied"] or 0) for r in sla_rows}
+    act_by_slug = {str(r["scenario_tag"]): int(r["pending_actions"] or 0) for r in act_rows}
+
+    shops_out: list[dict[str, Any]] = []
+    tot_reviews_all = 0
+    tot_neg_all = 0
+    weighted_rating_sum = 0.0
+    tot_low_star_all = 0
+    tot_low_replied_all = 0
+    tot_pending_act_all = 0
+
+    ch_acc = {
+        "shopee": {"tot": 0, "neg": 0, "rat_sum": 0.0},
+        "tiktok": {"tot": 0, "neg": 0, "rat_sum": 0.0},
+    }
+
+    for slug in unique_slugs:
+        row = rev_by_slug.get(slug)
+        meta = meta_map.get(slug) or {}
+        tot = int(row["total_reviews"] or 0) if row else 0
+        neg = int(row["neg_reviews"] or 0) if row else 0
+        avg_r = round(float(row["avg_rating"] or 0.0), 2) if row and row["avg_rating"] else 0.0
+        neg_pct = round((neg / tot) * 100.0, 1) if tot > 0 else 0.0
+        ci_low, ci_high = wilson_ci_pct(neg, tot)
+
+        sh_tot = int(row["shopee_reviews"] or 0) if row else 0
+        sh_neg = int(row["shopee_neg"] or 0) if row else 0
+        sh_avg = (
+            round(float(row["shopee_avg_rating"] or 0.0), 2)
+            if row and row["shopee_avg_rating"]
+            else 0.0
+        )
+        sh_neg_pct = round((sh_neg / sh_tot) * 100.0, 1) if sh_tot > 0 else 0.0
+
+        tk_tot = int(row["tiktok_reviews"] or 0) if row else 0
+        tk_neg = int(row["tiktok_neg"] or 0) if row else 0
+        tk_avg = (
+            round(float(row["tiktok_avg_rating"] or 0.0), 2)
+            if row and row["tiktok_avg_rating"]
+            else 0.0
+        )
+        tk_neg_pct = round((tk_neg / tk_tot) * 100.0, 1) if tk_tot > 0 else 0.0
+
+        low_tot = int(row["low_star_total"] or 0) if row else 0
+        low_rep = sla_by_slug.get(slug, 0)
+        pending_cskh = max(0, low_tot - low_rep)
+        sla_pct = round((low_rep / low_tot) * 100.0, 1) if low_tot > 0 else 100.0
+        pending_act = act_by_slug.get(slug, 0)
+
+        asp_stats = get_aspect_sentiment_stats(scenario_tag=slug, min_n=1, db=db_mgr)
+        pain_asps = [s for s in asp_stats if s.get("neg_count", 0) > 0]
+        top_pain = str(pain_asps[0]["aspect"]) if pain_asps else None
+
+        if tot > 0:
+            health_score = round(
+                max(
+                    0.0,
+                    min(100.0, (avg_r / 5.0) * 60.0 + (100.0 - neg_pct) * 0.25 + sla_pct * 0.15),
+                ),
+                1,
+            )
+        else:
+            health_score = 100.0
+
+        shops_out.append(
+            {
+                "slug": slug,
+                "name": str(meta.get("name") or slug),
+                "industry": str(meta.get("industry") or "raincoat"),
+                "total_reviews": tot,
+                "avg_rating": avg_r,
+                "negative_reviews": neg,
+                "negative_rate_pct": neg_pct,
+                "wilson_ci_95": [ci_low, ci_high],
+                "shopee_reviews": sh_tot,
+                "shopee_avg_rating": sh_avg,
+                "shopee_neg_rate_pct": sh_neg_pct,
+                "tiktok_reviews": tk_tot,
+                "tiktok_avg_rating": tk_avg,
+                "tiktok_neg_rate_pct": tk_neg_pct,
+                "low_star_total": low_tot,
+                "low_star_replied": low_rep,
+                "pending_cskh": pending_cskh,
+                "cskh_sla_pct": sla_pct,
+                "pending_actions_count": pending_act,
+                "top_pain_aspect": top_pain,
+                "health_score": health_score,
+            }
+        )
+
+        tot_reviews_all += tot
+        tot_neg_all += neg
+        weighted_rating_sum += avg_r * tot
+        tot_low_star_all += low_tot
+        tot_low_replied_all += low_rep
+        tot_pending_act_all += pending_act
+        ch_acc["shopee"]["tot"] += sh_tot
+        ch_acc["shopee"]["neg"] += sh_neg
+        ch_acc["shopee"]["rat_sum"] += sh_avg * sh_tot
+        ch_acc["tiktok"]["tot"] += tk_tot
+        ch_acc["tiktok"]["neg"] += tk_neg
+        ch_acc["tiktok"]["rat_sum"] += tk_avg * tk_tot
+
+    shops_out.sort(
+        key=lambda s: (-s["negative_rate_pct"], s["avg_rating"], -s["total_reviews"], s["slug"])
+    )
+
+    port_avg = round(weighted_rating_sum / tot_reviews_all, 2) if tot_reviews_all > 0 else 0.0
+    port_neg_pct = round((tot_neg_all / tot_reviews_all) * 100.0, 1) if tot_reviews_all > 0 else 0.0
+    port_sla_pct = (
+        round((tot_low_replied_all / tot_low_star_all) * 100.0, 1)
+        if tot_low_star_all > 0
+        else 100.0
+    )
+
+    channel_summary = {}
+    for ch_name, acc in ch_acc.items():
+        ctot = acc["tot"]
+        channel_summary[ch_name] = {
+            "reviews": ctot,
+            "avg_rating": round(acc["rat_sum"] / ctot, 2) if ctot > 0 else 0.0,
+            "neg_rate_pct": round((acc["neg"] / ctot) * 100.0, 1) if ctot > 0 else 0.0,
+        }
+
+    return {
+        "portfolio": {
+            "total_shops": len(shops_out),
+            "total_reviews": tot_reviews_all,
+            "portfolio_avg_rating": port_avg,
+            "portfolio_neg_rate_pct": port_neg_pct,
+            "portfolio_cskh_sla_pct": port_sla_pct,
+            "total_pending_cskh": max(0, tot_low_star_all - tot_low_replied_all),
+            "total_pending_actions": tot_pending_act_all,
+        },
+        "channel_summary": channel_summary,
+        "shops": shops_out,
     }
 
 

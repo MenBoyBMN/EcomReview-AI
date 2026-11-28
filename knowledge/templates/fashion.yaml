@@ -1,0 +1,152 @@
+# Domain Playbook: Thời Trang & May Mặc (Shopee & TikTok Shop)
+domain: "fashion_ecommerce_vn"
+industry: "fashion"
+display_name: "Thời trang & May mặc"
+version: "1.0.0"
+
+aspect_labels:
+  WATERPROOF: "Độ thấm hút / Giặt phai"
+  MATERIAL_DURABILITY: "Chất vải & Đường may"
+  FIT_SIZE: "Form dáng & Kích cỡ (Size)"
+  COMFORT_USABILITY: "Độ thoải mái khi mặc"
+  PRICE_VALUE: "Giá cả & Giá trị"
+  PACKAGING_SHIPPING: "Đóng gói & Giao hàng"
+  CUSTOMER_SERVICE: "Tư vấn & Đổi trả"
+  ACCESSIBILITY_DESIGN: "Màu sắc & Kiểu dáng"
+
+guardrails:
+  overclaim_keywords:
+    - "không bao giờ xù lông"
+    - "không bao giờ phai màu"
+    - "mặc đẹp 100%"
+    - "bảo hành trọn đời"
+    - "hàng hiệu chuẩn auth 100%"
+  prohibited_policy_keywords:
+    - "tặng tiền đổi 5 sao"
+    - "hoàn tiền nếu đánh giá 5 sao"
+    - "xóa đánh giá 1 sao"
+    - "mua hộ đánh giá ảo"
+    - "chuyển khoản ngoài sàn"
+    - "zalo cá nhân để nhận hoàn tiền"
+  deadline_keywords:
+    - "giờ"
+    - "ngày"
+    - "tuần"
+    - "24h"
+    - "48h"
+    - "72h"
+    - "ngay"
+    - "trong vòng"
+
+playbook_rules:
+  - rule_id: "FA_01"
+    aspect: "FIT_SIZE"
+    trigger: "TOP_PAIN"
+    action_type: "LISTING_UPDATE"
+    is_marketing: true
+    title: "Chuẩn hóa bảng thông số Size theo chiều cao, cân nặng và số đo 3 vòng"
+    what_to_do: "Cập nhật ảnh bảng Size chi tiết kèm gợi ý tăng hoặc giảm 1 size theo phom áo/quần thực tế và chụp mẫu cao nặng cụ thể ở ảnh số 2."
+    how_and_when: "Hoàn thiện bảng Size mới và cập nhật lên Shopee/TikTok trong vòng 24h."
+    success_metric: "Giảm tỷ lệ đổi trả hoặc phàn nàn chật/rộng xuống dưới 10% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "FA_02"
+    aspect: "MATERIAL_DURABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "PRODUCT_FIX"
+    is_marketing: false
+    title: "Kiểm tra lại chỉ thừa, đường vắt sổ và độ chắc của khóa kéo/cúc trước khi nhập kho"
+    what_to_do: "Yêu cầu xưởng cắt chỉ thừa sạch sẽ, gia cố bọ tại điểm chịu lực túi/khóa kéo và kiểm định ngẫu nhiên theo lô trước khi đóng gói."
+    how_and_when: "Áp dụng quy trình QC cắt chỉ và test khóa kéo tại kho trong vòng 48h."
+    success_metric: "Giảm tỷ lệ phàn nàn chỉ thừa và bung cúc dưới 5% trong 14 ngày tới."
+    effort: "MEDIUM"
+    impact: "HIGH"
+
+  - rule_id: "FA_03"
+    aspect: "WATERPROOF"
+    trigger: "TOP_PAIN"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Bổ sung hướng dẫn giặt riêng lần đầu và bảo quản giữ màu vải"
+    what_to_do: "Gắn thẻ hướng dẫn giặt bằng nước lạnh, không ngâm thuốc tẩy mạnh và phơi mặt trái để hạn chế phai màu hoặc thấm màu chéo."
+    how_and_when: "Cập nhật mô tả sản phẩm và in phiếu hướng dẫn giặt kèm đơn trong vòng 48h."
+    success_metric: "Giảm 30% khiếu nại về phai màu khi giặt sau 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "FA_04"
+    aspect: "COMFORT_USABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "PRODUCT_FIX"
+    is_marketing: false
+    title: "Cải thiện độ thoáng khí lớp lót và cắt gọn mác cổ tránh gây ngứa"
+    what_to_do: "Chuyển nhãn mác cổ sang chất liệu satin mềm hoặc in ép nhiệt ở lô mới để khách mặc cả ngày vẫn thoáng nhẹ, không cấn cổ."
+    how_and_when: "Làm việc với xưởng may và chốt mẫu cải tiến trong vòng 72h."
+    success_metric: "Giảm phản hồi về cảm giác bí nóng hoặc cấn ngứa xuống dưới 5% trong 30 ngày."
+    effort: "MEDIUM"
+    impact: "HIGH"
+
+  - rule_id: "FA_05"
+    aspect: "ACCESSIBILITY_DESIGN"
+    trigger: "STRENGTH"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Đẩy mạnh video quay cận chất vải và lên dáng thật dưới ánh sáng tự nhiên"
+    what_to_do: "Tận dụng feedback khen form đẹp, màu tôn da để quay video cận cảnh khi di chuyển giúp khách mới yên tâm chốt đơn."
+    how_and_when: "Quay và ghim video mới trên TikTok Shop và Shopee Video trong vòng 48h."
+    success_metric: "Tăng tỷ lệ chuyển đổi (CR) trang sản phẩm thêm 1.5% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "FA_06"
+    aspect: "PACKAGING_SHIPPING"
+    trigger: "TOP_PAIN"
+    action_type: "OPS"
+    is_marketing: false
+    title: "Quét mã vạch phân loại màu/size và dùng túi zip chống bụi"
+    what_to_do: "Bắt buộc quét mã SKU từng phân loại khi nhặt hàng và bọc túi zip gọn để quần áo không nhăn hoặc giao nhầm màu."
+    how_and_when: "Triển khai đối soát mã vạch tại bàn đóng gói trong vòng 24h."
+    success_metric: "Giảm tỷ lệ giao nhầm màu/size xuống dưới 1% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "FA_07"
+    aspect: "PRICE_VALUE"
+    trigger: "TOP_PAIN"
+    action_type: "PROMOTION"
+    is_marketing: true
+    title: "Tạo gói Mix & Match Mua 2 sản phẩm ưu đãi kèm voucher khách quen"
+    what_to_do: "Thiết lập combo áo + quần hoặc mua 2 chiếc để gia tăng cảm nhận giá trị vượt trội so với đơn giá lẻ."
+    how_and_when: "Cấu hình chương trình khuyến mãi trên Kênh Người Bán trong vòng 24h."
+    success_metric: "Tăng giá trị trung bình đơn hàng (AOV) thêm 15% trong 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "FA_08"
+    aspect: "CUSTOMER_SERVICE"
+    trigger: "TOP_PAIN"
+    action_type: "REVIEW_REPLY"
+    is_marketing: true
+    title: "Kích hoạt quy trình đổi size nhanh và phản hồi đánh giá tiêu cực trong 24h"
+    what_to_do: "Chủ động nhắn tin qua Chat của sàn hướng dẫn khách đổi size hoặc xử lý lỗi đường may nhanh gọn ngay sau khi nhận phản hồi."
+    how_and_when: "Xử lý toàn bộ đánh giá chưa hài lòng trong vòng 24h."
+    success_metric: "Đạt tỷ lệ phản hồi 100% đơn 1-3 sao trong ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+reply_templates:
+  greeting: "Dạ Shop Thời Trang xin chân thành cảm ơn Quý khách đã tin tưởng lựa chọn sản phẩm."
+  aspect_handlers:
+    WATERPROOF: "Về độ thấm hút và giữ màu khi giặt nước, Shop xin ghi nhận góp ý để điều chỉnh hướng dẫn chăm sóc vải rõ ràng hơn và hỗ trợ kiểm tra đơn qua Chat sàn ạ."
+    MATERIAL_DURABILITY: "Về chất liệu vải và đường may khóa kéo, Shop rất tiếc nếu sản phẩm còn sót chỉ thừa và sẵn sàng hỗ trợ đổi mới 1-1 ngay nếu có lỗi sản xuất."
+    FIT_SIZE: "Về kích cỡ và phom size, Shop xin ghi nhận để tư vấn sát số đo hơn và luôn sẵn sàng hỗ trợ đổi size linh hoạt cho Quý khách qua cổng Chat sàn."
+    COMFORT_USABILITY: "Về cảm giác thoáng nhẹ và độ tiện dụng khi mặc, Shop xin tiếp thu ý kiến để tối ưu chất vải mềm mịn hơn trong các bộ sưu tập tiếp theo."
+    PRICE_VALUE: "Shop luôn nỗ lực cân đối chất vải chỉn chu trong tầm giá hợp lý và mong được phục vụ Quý khách tốt hơn ở những đơn sau."
+    PACKAGING_SHIPPING: "Về khâu đóng gói và vận chuyển giao hàng, Shop thành thật xin lỗi vì trải nghiệm chưa trọn vẹn và đang làm việc sát với kho vận để cải thiện."
+    CUSTOMER_SERVICE: "Shop xin lỗi vì sự chậm trễ trong quá trình tư vấn chăm sóc và cam kết phản hồi nhanh chóng qua kênh Chat chính thức."
+    ACCESSIBILITY_DESIGN: "Shop cảm ơn góp ý quý báu của Quý khách về màu sắc và kiểu dáng để hoàn thiện hình ảnh sát thực tế hơn nữa."
+    GENERAL: "Shop đã ghi nhận phản hồi của Quý khách và luôn sẵn sàng hỗ trợ tận tâm qua Chat của sàn trong vòng 24h ạ."
+  closing: "Chúc Quý khách luôn thật tự tin, rạng rỡ và hài lòng với những lựa chọn của mình!"
+
+# CreBy: MenBoyBMN

@@ -47,6 +47,7 @@ services:
     environment:
       ECOMREVIEW_ENV: "${ECOMREVIEW_ENV:-development}"
       ECOMREVIEW_JWT_SECRET: "${ECOMREVIEW_JWT_SECRET:-}"
+      ECOMREVIEW_ENCRYPTION_KEY: "${ECOMREVIEW_ENCRYPTION_KEY:-}"
       ECOMREVIEW_COOKIE_SECURE: "${ECOMREVIEW_COOKIE_SECURE:-false}"
       DEMO_CACHE_MODE: "${DEMO_CACHE_MODE:-true}"
       ECOMREVIEW_DB_BACKEND: "postgres"
@@ -91,6 +92,7 @@ services:
         required: false
     environment:
       ECOMREVIEW_ENV: "${ECOMREVIEW_ENV:-development}"
+      ECOMREVIEW_ENCRYPTION_KEY: "${ECOMREVIEW_ENCRYPTION_KEY:-}"
       DEMO_CACHE_MODE: "${DEMO_CACHE_MODE:-true}"
       ECOMREVIEW_DB_BACKEND: "postgres"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-ecom_user}:${POSTGRES_PASSWORD:-ecom_password}@db:5432/${POSTGRES_DB:-ecomreview}"
@@ -100,7 +102,16 @@ services:
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
       GEMINI_MODEL_POOL: "${GEMINI_MODEL_POOL:-}"
-    command: ["rq", "worker", "--url", "redis://redis:6379/0", "ecomreview_default"]
+    command:
+      [
+        "rq",
+        "worker",
+        "--url",
+        "redis://redis:6379/0",
+        "ecomreview_critical",
+        "ecomreview_default",
+        "ecomreview_low",
+      ]
     volumes:
       - ./data:/app/data
       - ./results:/app/results

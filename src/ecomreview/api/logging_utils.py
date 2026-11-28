@@ -14,6 +14,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ecomreview.api.metrics import metrics_registry
+
 logger = logging.getLogger("ecomreview.http")
 
 
@@ -62,6 +64,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         start = time.perf_counter()
         response = await call_next(request)
         duration_ms = round((time.perf_counter() - start) * 1000.0, 2)
+        metrics_registry.observe_http(
+            request.method, request.url.path, response.status_code, duration_ms / 1000.0
+        )
         response.headers["X-Request-ID"] = req_id
 
         principal = getattr(request.state, "principal", None)

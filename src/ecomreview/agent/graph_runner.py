@@ -17,6 +17,7 @@ from typing import Any
 from ecomreview.agent.critic import HybridCritic
 from ecomreview.agent.insight_engine import InsightEngine
 from ecomreview.agent.planner import ActionPlanner
+from ecomreview.agent.playbook_loader import load_shop_playbook, normalize_industry
 from ecomreview.db.database import DatabaseManager
 from ecomreview.schemas import ActionProposal, CriticReport
 
@@ -73,6 +74,30 @@ class EcomReviewGraphRunner:
         )
 
         try:
+            run_planner = self.planner
+            run_critic = self.critic
+            try:
+                shop_pb = load_shop_playbook(db=self.db, scenario_tag=scenario_tag)
+            except Exception:
+                shop_pb = {}
+            shop_prof = shop_pb.get("shop_profile") or {}
+            eff_industry = normalize_industry(shop_prof.get("industry"))
+            brand_voice = dict(shop_prof.get("brand_voice") or {})
+            extra_oc = list(brand_voice.get("custom_overclaim_keywords") or [])
+            if eff_industry != "raincoat" or any(
+                brand_voice.get(k) for k in ("tone", "cskh_notes", "custom_overclaim_keywords")
+            ):
+                run_planner = ActionPlanner(
+                    llm_client=self.planner._llm_client,
+                    use_llm=self.planner.use_llm,
+                    industry=eff_industry,
+                    brand_voice=brand_voice,
+                )
+                run_critic = HybridCritic(
+                    industry=eff_industry,
+                    extra_overclaim_keywords=extra_oc,
+                )
+
             # Node 1 & 2: SQL/Wilson CI Aggregator + Insight Engine
             insights = self.insight_engine.generate_insights(
                 scenario_tag=scenario_tag, min_n=min_n, persist=persist_db, run_id=run_id
@@ -88,14 +113,14 @@ class EcomReviewGraphRunner:
 
             # Node 3 <-> Node 4: Planner <-> Hybrid Critic Loop
             for attempt in range(self.max_retries + 1):
-                proposals = self.planner.generate_proposals(
+                proposals = run_planner.generate_proposals(
                     insights=insights,
                     fallback_review_ids=valid_rev_ids,
                     critic_feedback=feedback_prompt,
                     max_actions=max_actions,
                 )
 
-                report = self.critic.evaluate(
+                report = run_critic.evaluate(
                     proposals=proposals,
                     insights=insights,
                     valid_review_ids=valid_rev_set,
@@ -120,12 +145,12 @@ class EcomReviewGraphRunner:
             # Node 5: Deterministic Auto-Repair Fallback if Critic still flags any violation
             auto_repaired = False
             if report is not None and not report.passed:
-                proposals = self.critic.auto_repair(
+                proposals = run_critic.auto_repair(
                     proposals=proposals,
                     insights=insights,
                     valid_review_ids=valid_rev_set,
                 )
-                report = self.critic.evaluate(
+                report = run_critic.evaluate(
                     proposals=proposals,
                     insights=insights,
                     valid_review_ids=valid_rev_set,
@@ -172,12 +197,13 @@ class EcomReviewGraphRunner:
 
             planner_mode = (
                 "llm"
-                if self.planner.last_used_llm
-                else ("llm_fallback_playbook" if self.planner.use_llm else "playbook")
+                if run_planner.last_used_llm
+                else ("llm_fallback_playbook" if run_planner.use_llm else "playbook")
             )
             duration_ms = round((time.perf_counter() - t0) * 1000, 2)
             trace_payload = {
                 "scenario_tag": scenario_tag,
+                "industry": eff_industry,
                 "run_id": run_id,
                 "planner_mode": planner_mode,
                 "system": "P1_Evidence_Grounded_Critic_Graph",

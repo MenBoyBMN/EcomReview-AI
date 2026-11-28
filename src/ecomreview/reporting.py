@@ -6,11 +6,13 @@ import html
 import io
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from ecomreview.agent.insight_engine import ASPECT_VN_LABELS, verify_numbers_in_statement
 from ecomreview.agent.tools_aggregator import (
     detect_trend_alerts,
     get_aspect_sentiment_stats,
@@ -18,6 +20,7 @@ from ecomreview.agent.tools_aggregator import (
     wilson_ci_pct,
 )
 from ecomreview.db.database import DatabaseManager
+from ecomreview.security import scrub_pii
 
 logger = logging.getLogger(__name__)
 
@@ -456,6 +459,152 @@ def build_html_report(
 </body>
 </html>
 """
+
+
+def build_weekly_digest(
+    scenario_tag: str = "real_shop",
+    db: DatabaseManager | None = None,
+    as_of: str | None = None,
+) -> dict[str, Any]:
+    """Build an executive weekly digest (verified metrics, PII-scrubbed) for Telegram/Webhook."""
+    db_mgr = db or DatabaseManager()
+    ict_tz = timezone(timedelta(hours=7))
+    if as_of:
+        try:
+            ref_dt = datetime.strptime(str(as_of)[:10], "%Y-%m-%d").replace(tzinfo=ict_tz)
+        except ValueError:
+            ref_dt = datetime.now(ict_tz)
+    else:
+        ref_dt = datetime.now(ict_tz)
+    iso_cal = ref_dt.isocalendar()
+    week_key = f"{iso_cal.year}-W{iso_cal.week:02d}"
+
+    shop_name = scenario_tag
+    try:
+        shop_info = db_mgr.get_pilot_shop(scenario_tag, include_secret=False)
+        if shop_info and shop_info.get("name"):
+            shop_name = str(shop_info["name"])
+    except Exception:
+        pass
+
+    with db_mgr.get_connection(read_only=True) as conn:
+        kpi_row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                AVG(rating) AS avg_rating,
+                SUM(CASE WHEN overall_sentiment = 'negative' THEN 1 ELSE 0 END) AS neg,
+                SUM(CASE WHEN platform = 'shopee' THEN 1 ELSE 0 END) AS shopee,
+                SUM(CASE WHEN platform = 'tiktok' THEN 1 ELSE 0 END) AS tiktok,
+                SUM(CASE WHEN rating <= 3 THEN 1 ELSE 0 END) AS low_star_total
+            FROM reviews WHERE scenario_tag = ?
+            """,
+            (scenario_tag,),
+        ).fetchone()
+        sla_row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT r.review_id) AS low_star_sent
+            FROM reviews r
+            JOIN review_replies rr
+              ON r.review_id = rr.review_id AND r.scenario_tag = rr.scenario_tag
+            WHERE r.scenario_tag = ? AND r.rating <= 3 AND rr.status = 'SENT'
+            """,
+            (scenario_tag,),
+        ).fetchone()
+
+    total_revs = int(kpi_row["total"] or 0)
+    avg_rating = round(float(kpi_row["avg_rating"] or 0.0), 2)
+    neg_revs = int(kpi_row["neg"] or 0)
+    neg_rate = round((neg_revs / total_revs) * 100.0, 1) if total_revs else 0.0
+    ci_low, ci_high = wilson_ci_pct(neg_revs, total_revs)
+    shopee_cnt = int(kpi_row["shopee"] or 0)
+    tiktok_cnt = int(kpi_row["tiktok"] or 0)
+    low_star_total = int(kpi_row["low_star_total"] or 0)
+    low_star_sent = int(sla_row["low_star_sent"] or 0)
+    pending_cskh = max(0, low_star_total - low_star_sent)
+    sla_pct = round((low_star_sent / low_star_total) * 100.0, 1) if low_star_total else 100.0
+
+    aspect_stats = get_aspect_sentiment_stats(scenario_tag=scenario_tag, min_n=1, db=db_mgr)
+    top_pains = [s for s in aspect_stats if s.get("neg_count", 0) > 0][:3]
+    alerts = detect_trend_alerts(scenario_tag=scenario_tag, min_n=5, as_of=as_of, db=db_mgr)
+
+    lines = [
+        f"Báo cáo tuần {week_key} — {scrub_pii(shop_name)} ({scenario_tag})",
+        f"• Tổng đánh giá: {total_revs} (Shopee: {shopee_cnt}, TikTok: {tiktok_cnt})",
+        (
+            f"• Điểm TB: {avg_rating} sao | "
+            f"Tiêu cực: {neg_revs} ({neg_rate}%, Wilson CI [{ci_low}%-{ci_high}%])"
+        ),
+        (
+            f"• Tiến độ CSKH (<=3 sao): đã gửi {low_star_sent}/{low_star_total} "
+            f"({sla_pct}%), tồn đọng {pending_cskh}"
+        ),
+    ]
+    num_bank: dict[str, Any] = {
+        "total_revs": total_revs,
+        "shopee_cnt": shopee_cnt,
+        "tiktok_cnt": tiktok_cnt,
+        "avg_rating": avg_rating,
+        "neg_revs": neg_revs,
+        "neg_rate": neg_rate,
+        "ci_low": ci_low,
+        "ci_high": ci_high,
+        "low_star_sent": low_star_sent,
+        "low_star_total": low_star_total,
+        "sla_pct": sla_pct,
+        "pending_cskh": pending_cskh,
+        "alerts_cnt": len(alerts),
+        "week_year": iso_cal.year,
+        "week_num": iso_cal.week,
+    }
+    if top_pains:
+        pain_parts = []
+        for idx, tp in enumerate(top_pains, start=1):
+            asp_code = str(tp["aspect"])
+            asp_label = ASPECT_VN_LABELS.get(asp_code, asp_code)
+            pain_parts.append(
+                f"{idx}. {asp_label}: {tp['neg_pct']}% ({tp['neg_count']}/{tp['total']})"
+            )
+            num_bank[f"tp_{idx}_idx"] = idx
+            num_bank[f"tp_{idx}_pct"] = tp["neg_pct"]
+            num_bank[f"tp_{idx}_neg"] = tp["neg_count"]
+            num_bank[f"tp_{idx}_tot"] = tp["total"]
+        lines.append("• Top vấn đề nổi bật: " + "; ".join(pain_parts))
+    else:
+        lines.append("• Top vấn đề nổi bật: Chưa ghi nhận khía cạnh tiêu cực.")
+
+    lines.append(f"• Cảnh báo đột biến (Z-test): {len(alerts)} cảnh báo đang kích hoạt.")
+
+    raw_msg = scrub_pii("\n".join(lines))
+    if not verify_numbers_in_statement(raw_msg, num_bank):
+        logger.warning("Weekly digest numeric verification fallback triggered for %s", scenario_tag)
+        raw_msg = scrub_pii(
+            f"Báo cáo tuần {week_key} — {shop_name}: {total_revs} đánh giá, "
+            f"điểm TB {avg_rating}, tiêu cực {neg_rate}%."
+        )
+
+    return {
+        "week_key": week_key,
+        "scenario_tag": scenario_tag,
+        "shop_name": shop_name,
+        "title": f"Báo cáo tổng hợp tuần {week_key}",
+        "message_text": raw_msg,
+        "metrics": {
+            "total_reviews": total_revs,
+            "avg_rating": avg_rating,
+            "negative_reviews": neg_revs,
+            "negative_rate_pct": neg_rate,
+            "wilson_ci_95": [ci_low, ci_high],
+            "shopee_reviews": shopee_cnt,
+            "tiktok_reviews": tiktok_cnt,
+            "low_star_total": low_star_total,
+            "low_star_sent": low_star_sent,
+            "pending_cskh": pending_cskh,
+            "cskh_sla_pct": sla_pct,
+            "top_pains": top_pains,
+            "alerts_count": len(alerts),
+        },
+    }
 
 
 # CreBy: MenBoyBMN

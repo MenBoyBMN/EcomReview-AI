@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import time
 
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from ecomreview.api.main import create_app
+from ecomreview.api.rate_limit import rate_limiter, webhook_replay_guard
 from ecomreview.connectors.shopee import ShopeeConnector
 from ecomreview.connectors.tiktok import TikTokShopConnector
 from ecomreview.db.database import DatabaseManager
@@ -111,6 +114,95 @@ class TestSellerBridgeAndConnectors:
             "/product/202309/reviews", {"app_key": "app_1", "timestamp": "1"}
         )
         assert len(sig_ttk) == 64
+
+    def test_webhook_replay_protection_and_timestamp_window_in_production(
+        self, tmp_path, monkeypatch
+    ):
+        rate_limiter.reset()
+        webhook_replay_guard.reset()
+        monkeypatch.setenv("ECOMREVIEW_ENV", "production")
+        monkeypatch.setenv("ECOMREVIEW_JWT_SECRET", "super-strong-pilot-jwt-secret-key-32bytes")
+        monkeypatch.setenv("ECOMREVIEW_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+        monkeypatch.setenv("ECOMREVIEW_CORS_ORIGINS", "https://pilot.ecomreview.vn")
+        monkeypatch.setenv("ECOMREVIEW_QUEUE_DISABLE", "true")
+
+        db_file = tmp_path / "webhook_prod.db"
+        db = DatabaseManager(db_path=str(db_file))
+        shop = db.create_pilot_shop(slug="shop_prod_wh", name="Shop Prod Webhook")
+        app = create_app(db_path=str(db_file))
+        client = TestClient(app, base_url="https://testserver")
+
+        payload_bytes = json.dumps(
+            {
+                "analyzer_method": "b1_rule",
+                "reviews": [
+                    {
+                        "review_id": "wh_prod_1",
+                        "platform": "tiktok",
+                        "rating": 2,
+                        "text": "Áo mưa bị rách đường may vai",
+                        "created_at": "2026-11-23",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        # Production rejects unsigned/missing timestamp
+        legacy_sig = hmac.new(
+            shop["webhook_secret"].encode("utf-8"), payload_bytes, hashlib.sha256
+        ).hexdigest()
+        r_no_ts = client.post(
+            "/api/v1/integrations/webhook/shop_prod_wh",
+            content=payload_bytes,
+            headers={"Content-Type": "application/json", "X-EcomReview-Signature": legacy_sig},
+        )
+        assert r_no_ts.status_code == 401
+
+        # Expired timestamp (> 5 mins) -> 401
+        stale_ts = str(int(time.time()) - 400)
+        stale_sig = hmac.new(
+            shop["webhook_secret"].encode("utf-8"),
+            f"{stale_ts}.".encode("utf-8") + payload_bytes,
+            hashlib.sha256,
+        ).hexdigest()
+        r_stale = client.post(
+            "/api/v1/integrations/webhook/shop_prod_wh",
+            content=payload_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-EcomReview-Timestamp": stale_ts,
+                "X-EcomReview-Signature": stale_sig,
+            },
+        )
+        assert r_stale.status_code == 401
+
+        # Fresh timestamp + valid signature -> 202, immediate replay -> 409
+        fresh_ts = str(int(time.time()))
+        fresh_sig = hmac.new(
+            shop["webhook_secret"].encode("utf-8"),
+            f"{fresh_ts}.".encode("utf-8") + payload_bytes,
+            hashlib.sha256,
+        ).hexdigest()
+        headers = {
+            "Content-Type": "application/json",
+            "X-EcomReview-Timestamp": fresh_ts,
+            "X-EcomReview-Nonce": "nonce-abc-1",
+            "X-EcomReview-Signature": fresh_sig,
+        }
+        r_first = client.post(
+            "/api/v1/integrations/webhook/shop_prod_wh",
+            content=payload_bytes,
+            headers=headers,
+        )
+        assert r_first.status_code == 202
+
+        r_replay = client.post(
+            "/api/v1/integrations/webhook/shop_prod_wh",
+            content=payload_bytes,
+            headers=headers,
+        )
+        assert r_replay.status_code == 409
 
 
 # CreBy: MenBoyBMN

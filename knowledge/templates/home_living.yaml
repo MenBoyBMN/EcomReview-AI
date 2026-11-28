@@ -1,0 +1,152 @@
+# Domain Playbook: Gia Dụng & Đời Sống (Shopee & TikTok Shop)
+domain: "home_living_ecommerce_vn"
+industry: "home_living"
+display_name: "Gia dụng & Đời sống"
+version: "1.0.0"
+
+aspect_labels:
+  WATERPROOF: "Độ kín nước / Chống rò rỉ"
+  MATERIAL_DURABILITY: "Độ dày nhựa/inox & Độ bền"
+  FIT_SIZE: "Kích thước & Dung tích"
+  COMFORT_USABILITY: "Dễ lắp đặt & Tiện dụng"
+  PRICE_VALUE: "Giá cả & Giá trị sử dụng"
+  PACKAGING_SHIPPING: "Chống vỡ / Đóng gói & Giao hàng"
+  CUSTOMER_SERVICE: "Bảo hành & Hướng dẫn"
+  ACCESSIBILITY_DESIGN: "Thẩm mỹ & Màu sắc"
+
+guardrails:
+  overclaim_keywords:
+    - "không bao giờ vỡ"
+    - "chống rò rỉ 100%"
+    - "siêu bền vĩnh viễn"
+    - "bảo hành trọn đời"
+    - "chịu lực tuyệt đối 100%"
+  prohibited_policy_keywords:
+    - "tặng tiền đổi 5 sao"
+    - "hoàn tiền nếu đánh giá 5 sao"
+    - "xóa đánh giá 1 sao"
+    - "mua hộ đánh giá ảo"
+    - "chuyển khoản ngoài sàn"
+    - "zalo cá nhân để nhận hoàn tiền"
+  deadline_keywords:
+    - "giờ"
+    - "ngày"
+    - "tuần"
+    - "24h"
+    - "48h"
+    - "72h"
+    - "ngay"
+    - "trong vòng"
+
+playbook_rules:
+  - rule_id: "HL_01"
+    aspect: "PACKAGING_SHIPPING"
+    trigger: "TOP_PAIN"
+    action_type: "OPS"
+    is_marketing: false
+    title: "Bổ sung thùng carton 5 lớp kèm xốp góc cho đồ gia dụng dễ móp/vỡ"
+    what_to_do: "Gia cố 4 góc sản phẩm bằng mút xốp định hình, chèn đầy khoảng trống trong thùng carton và kiểm đếm đủ phụ kiện ốc vít trước khi dán băng keo."
+    how_and_when: "Áp dụng quy chuẩn đóng gói chống va đập mới tại kho trong vòng 24h."
+    success_metric: "Giảm tỷ lệ hư hỏng vỡ móp và thiếu phụ kiện khi vận chuyển xuống dưới 1% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "HL_02"
+    aspect: "COMFORT_USABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "CUSTOMER_CARE"
+    is_marketing: true
+    title: "In sơ đồ lắp đặt tiếng Việt kèm mã hướng dẫn video dễ hiểu"
+    what_to_do: "Đính kèm tờ rơi hướng dẫn lắp ráp từng bước bằng hình ảnh minh họa rõ ràng giúp khách tự thao tác trong 3 phút không bị vướng."
+    how_and_when: "Hoàn thiện tờ hướng dẫn và đặt vào hộp sản phẩm trong vòng 48h."
+    success_metric: "Giảm 40% đánh giá than phiền khó lắp đặt hoặc thiếu hướng dẫn trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "HL_03"
+    aspect: "MATERIAL_DURABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "PRODUCT_FIX"
+    is_marketing: false
+    title: "Nâng cấp độ dày vật liệu nhựa/inox và kiểm tra khớp nối chịu lực"
+    what_to_do: "Phản hồi nhà cung cấp loại bỏ ba-via nhựa sắc cạnh, tăng độ dày khung chịu lực và kiểm tra ngẫu nhiên 10 mẫu mỗi lô nhập."
+    how_and_when: "Làm việc với nhà cung cấp và kiểm lô tồn kho trong vòng 72h."
+    success_metric: "Giảm tỷ lệ phàn nàn lỏng khớp, ọp ẹp xuống dưới 5% trong 30 ngày."
+    effort: "HIGH"
+    impact: "HIGH"
+
+  - rule_id: "HL_04"
+    aspect: "FIT_SIZE"
+    trigger: "TOP_PAIN"
+    action_type: "LISTING_UPDATE"
+    is_marketing: true
+    title: "Chụp ảnh sản phẩm đặt cạnh vật dụng quen thuộc để khách hình dung đúng kích thước"
+    what_to_do: "Bổ sung thông số dài x rộng x cao rõ ràng trên ảnh chính và chụp so sánh thực tế trong không gian bếp/phòng ngủ."
+    how_and_when: "Cập nhật bộ ảnh thông số kích thước lên gian hàng trong vòng 24h."
+    success_metric: "Giảm 30% phàn nàn sản phẩm nhỏ hơn kỳ vọng trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "HL_05"
+    aspect: "WATERPROOF"
+    trigger: "TOP_PAIN"
+    action_type: "PRODUCT_FIX"
+    is_marketing: false
+    title: "Kiểm tra gioăng cao su nắp đậy và test thử khả năng giữ kín nước"
+    what_to_do: "Đảm bảo gioăng silicon lắp khít, không bị xoắn hay hở mép gây rò rỉ nước khi nghiêng bình/hộp."
+    how_and_when: "Kiểm định xác suất gioăng kín nước theo lô hàng trong vòng 48h."
+    success_metric: "Giảm tỷ lệ phản hồi rò nước xuống dưới 3% trong 14 ngày."
+    effort: "MEDIUM"
+    impact: "HIGH"
+
+  - rule_id: "HL_06"
+    aspect: "ACCESSIBILITY_DESIGN"
+    trigger: "STRENGTH"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Sản xuất video setup góc nhà gọn đẹp cùng sản phẩm gia dụng"
+    what_to_do: "Tận dụng phản hồi khen thiết kế tối giản, sang trọng để làm video trước/sau khi sắp xếp không gian sống."
+    how_and_when: "Quay và đăng video lên TikTok Shop và Shopee trong vòng 48h."
+    success_metric: "Tăng tỷ lệ chuyển đổi (CR) sản phẩm thêm 1.5% trong 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "HL_07"
+    aspect: "PRICE_VALUE"
+    trigger: "TOP_PAIN"
+    action_type: "PROMOTION"
+    is_marketing: true
+    title: "Thiết lập Combo Bộ Sắp Xếp Nhà Cửa mua kèm tiết kiệm"
+    what_to_do: "Gộp các món đồ dùng thiết yếu thành bộ combo đồng bộ màu sắc giúp khách tối ưu chi phí vận chuyển và giá đơn."
+    how_and_when: "Cấu hình combo trên Kênh Người Bán trong vòng 24h."
+    success_metric: "Tăng giá trị đơn hàng trung bình (AOV) thêm 15% trong 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "HL_08"
+    aspect: "CUSTOMER_SERVICE"
+    trigger: "TOP_PAIN"
+    action_type: "REVIEW_REPLY"
+    is_marketing: true
+    title: "Gửi bù phụ kiện thiếu và bảo hành 1 đổi 1 nhanh cho đơn đánh giá 1-3 sao"
+    what_to_do: "Chủ động liên hệ qua Chat sàn gửi bù ốc vít/nắp thay thế hoàn toàn miễn phí nếu khách nhận thiếu hoặc nứt vỡ khi giao."
+    how_and_when: "Xử lý toàn bộ khiếu nại và gửi bù trong vòng 24h."
+    success_metric: "Đạt 100% phản hồi đánh giá tiêu cực trong 24h."
+    effort: "LOW"
+    impact: "HIGH"
+
+reply_templates:
+  greeting: "Dạ Shop Gia Dụng Tiện Ích xin chân thành cảm ơn Quý khách đã đặt hàng và phản hồi."
+  aspect_handlers:
+    WATERPROOF: "Về độ kín và khả năng chống rò rỉ nước, Shop rất tiếc nếu gioăng/nắp chưa khít và sẵn sàng hỗ trợ gửi bù phụ kiện hoặc đổi mới ngay qua Chat sàn."
+    MATERIAL_DURABILITY: "Về chất liệu độ dày và độ bền sản phẩm, Shop ghi nhận ý kiến để tăng cường kiểm định và hỗ trợ bảo hành đổi mới nếu có lỗi từ nhà sản xuất."
+    FIT_SIZE: "Về kích thước thực tế sản phẩm, Shop xin tiếp thu để hiển thị số đo đối chiếu trực quan hơn trên ảnh mô tả giúp Quý khách dễ chọn lựa."
+    COMFORT_USABILITY: "Về sự tiện dụng khi lắp đặt và sử dụng hằng ngày, Shop sẵn sàng gửi hướng dẫn chi tiết từng bước qua tin nhắn Chat để Quý khách thao tác dễ dàng hơn."
+    PRICE_VALUE: "Shop luôn nỗ lực mang lại sản phẩm tiện ích bền đẹp với mức giá phải chăng và mong tiếp tục được Quý khách tin tưởng ủng hộ."
+    PACKAGING_SHIPPING: "Về khâu đóng gói chống sốc và vận chuyển giao hàng, Shop thành thật xin lỗi nếu hộp bị va đập móp vỡ và xin hỗ trợ xử lý ngay qua Chat của sàn."
+    CUSTOMER_SERVICE: "Shop xin lỗi vì sự chậm trễ trong quá trình chăm sóc bảo hành và cam kết phản hồi nhanh chóng qua kênh Chat chính thức."
+    ACCESSIBILITY_DESIGN: "Shop cảm ơn lời khen và góp ý về kiểu dáng, màu sắc để ngày càng đa dạng hơn các mẫu trang trí không gian sống."
+    GENERAL: "Shop đã ghi nhận góp ý của Quý khách và luôn sẵn sàng hỗ trợ gửi bù hoặc đổi trả qua cổng Chat của sàn trong vòng 24h ạ."
+  closing: "Chúc Quý khách và gia đình luôn có không gian sống thật gọn gàng, tiện nghi và ấm áp!"
+
+# CreBy: MenBoyBMN

@@ -1,0 +1,153 @@
+# Domain Playbook: Mỹ Phẩm & Chăm Sóc Da (Shopee & TikTok Shop)
+domain: "cosmetics_ecommerce_vn"
+industry: "cosmetics"
+display_name: "Mỹ phẩm & Chăm sóc da"
+version: "1.0.0"
+
+aspect_labels:
+  WATERPROOF: "Độ thấm thấu / Lâu trôi"
+  MATERIAL_DURABILITY: "Kết cấu / Hạn dùng & Chai lọ"
+  FIT_SIZE: "Dung tích & Phù hợp loại da"
+  COMFORT_USABILITY: "Độ dịu nhẹ / Mùi hương"
+  PRICE_VALUE: "Giá cả & Hiệu quả"
+  PACKAGING_SHIPPING: "Chống sốc / Niêm phong & Giao hàng"
+  CUSTOMER_SERVICE: "Tư vấn da & Đổi trả"
+  ACCESSIBILITY_DESIGN: "Tông màu & Bao bì"
+
+guardrails:
+  overclaim_keywords:
+    - "trắng bật tông 100%"
+    - "hết mụn vĩnh viễn"
+    - "hiệu quả ngay sau 1 lần"
+    - "không bao giờ kích ứng"
+    - "đặc trị dứt điểm 100%"
+    - "bảo hành trọn đời"
+  prohibited_policy_keywords:
+    - "tặng tiền đổi 5 sao"
+    - "hoàn tiền nếu đánh giá 5 sao"
+    - "xóa đánh giá 1 sao"
+    - "mua hộ đánh giá ảo"
+    - "chuyển khoản ngoài sàn"
+    - "zalo cá nhân để nhận hoàn tiền"
+  deadline_keywords:
+    - "giờ"
+    - "ngày"
+    - "tuần"
+    - "24h"
+    - "48h"
+    - "72h"
+    - "ngay"
+    - "trong vòng"
+
+playbook_rules:
+  - rule_id: "CO_01"
+    aspect: "PACKAGING_SHIPPING"
+    trigger: "TOP_PAIN"
+    action_type: "OPS"
+    is_marketing: false
+    title: "Quấn 2 lớp xốp hơi chống sốc và niêm phong nắp chai chống tràn"
+    what_to_do: "Bọc màng co chặt phần nắp vòi/nắp vặn, quấn xốp nổ tối thiểu 2 vòng và dán tem hàng dễ vỡ cho toàn bộ chai thủy tinh và serum."
+    how_and_when: "Áp dụng tiêu chuẩn đóng gói chống tràn mới tại kho trong vòng 24h."
+    success_metric: "Giảm tỷ lệ phản hồi móp hộp, rò rỉ dung dịch xuống dưới 1% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "CO_02"
+    aspect: "FIT_SIZE"
+    trigger: "TOP_PAIN"
+    action_type: "LISTING_UPDATE"
+    is_marketing: true
+    title: "Bổ sung bảng hướng dẫn chọn sản phẩm theo từng loại da và dung tích"
+    what_to_do: "Thêm infographic phân biệt rõ sản phẩm hợp da dầu, da khô hay da nhạy cảm và hiển thị rõ dung tích ml thực tế bên cạnh ảnh mẫu."
+    how_and_when: "Cập nhật ảnh mô tả và phần chi tiết sản phẩm trong vòng 24h."
+    success_metric: "Giảm 25% đánh giá than phiền không hợp chất da trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "CO_03"
+    aspect: "COMFORT_USABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "CUSTOMER_CARE"
+    is_marketing: true
+    title: "Gửi thẻ hướng dẫn test thử vùng da nhỏ trước khi dùng toàn mặt"
+    what_to_do: "Đính kèm thẻ hướng dẫn thứ tự chu trình chăm sóc da và khuyến nghị thử trước ở vùng cổ/tay trong 48h cho khách lần đầu sử dụng."
+    how_and_when: "Đưa thẻ hướng dẫn vào đơn hàng xuất kho trong vòng 48h."
+    success_metric: "Giảm 30% khiếu nại cảm giác châm chích hoặc mùi hương lạ trong 30 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "CO_04"
+    aspect: "WATERPROOF"
+    trigger: "TOP_PAIN"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Quay clip hướng dẫn thoa từng lớp mỏng giúp thẩm thấu nhanh, hạn chế trôi nước"
+    what_to_do: "Sản xuất video ngắn hướng dẫn lượng dùng chuẩn và thời gian chờ thấm tệp vào da để tối ưu độ bền màu/lớp nền."
+    how_and_when: "Đăng video lên đầu trang sản phẩm Shopee và TikTok Shop trong vòng 48h."
+    success_metric: "Tăng tỷ lệ chuyển đổi (CR) thêm 1.5% và giảm phàn nàn bết dính sau 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "CO_05"
+    aspect: "MATERIAL_DURABILITY"
+    trigger: "TOP_PAIN"
+    action_type: "OPS"
+    is_marketing: false
+    title: "Kiểm tra số lô, hạn sử dụng FIFO và test vòi bơm trước khi xuất kho"
+    what_to_do: "Siết quy trình xuất kho nhập trước xuất trước (FIFO), dán rõ ngày sản xuất/HSD và loại bỏ chai bị kẹt vòi xịt."
+    how_and_when: "Rà soát toàn bộ lô hàng tồn kho trong vòng 48h."
+    success_metric: "Đạt 0 khiếu nại về hàng cận date hoặc vòi bơm lỗi trong 30 ngày."
+    effort: "MEDIUM"
+    impact: "HIGH"
+
+  - rule_id: "CO_06"
+    aspect: "ACCESSIBILITY_DESIGN"
+    trigger: "STRENGTH"
+    action_type: "CONTENT"
+    is_marketing: true
+    title: "Tổng hợp swatch màu thực tế trên nhiều tông da làm nội dung chuyển đổi"
+    what_to_do: "Biên tập phản hồi tích cực kèm ảnh test tông màu thật dưới ánh sáng thường để khách dễ chọn màu chuẩn."
+    how_and_when: "Cập nhật thư viện ảnh và video ghim trong vòng 48h."
+    success_metric: "Tăng tỷ lệ nhấp và hoàn tất đơn hàng thêm 2% trong 14 ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+  - rule_id: "CO_07"
+    aspect: "PRICE_VALUE"
+    trigger: "TOP_PAIN"
+    action_type: "PROMOTION"
+    is_marketing: true
+    title: "Ra mắt bản Mini-size dùng thử và Combo dưỡng da tiết kiệm"
+    what_to_do: "Tạo lựa chọn dung tích nhỏ cho khách mới trải nghiệm và gói combo đi kèm quà tặng bông tẩy trang/sample chính hãng."
+    how_and_when: "Thiết lập phân loại và deal mua kèm trên sàn trong vòng 24h."
+    success_metric: "Tăng 15% đơn hàng từ khách hàng mới trong 14 ngày."
+    effort: "LOW"
+    impact: "MEDIUM"
+
+  - rule_id: "CO_08"
+    aspect: "CUSTOMER_SERVICE"
+    trigger: "TOP_PAIN"
+    action_type: "REVIEW_REPLY"
+    is_marketing: true
+    title: "Phản hồi chuyên sâu theo tình trạng da và hỗ trợ đổi trả sản phẩm lỗi bao bì trong 24h"
+    what_to_do: "Phân công chuyên viên tư vấn trả lời mọi đánh giá 1-3 sao và chủ động hỗ trợ kiểm tra tem chính hãng/đổi mới chai rò rỉ qua Chat sàn."
+    how_and_when: "Xử lý toàn bộ phản hồi tiêu cực trong vòng 24h."
+    success_metric: "Duy trì 100% phản hồi CSKH trong ngày."
+    effort: "LOW"
+    impact: "HIGH"
+
+reply_templates:
+  greeting: "Dạ Gian hàng Mỹ Phẩm Chính Hãng xin chân thành cảm ơn Quý khách đã tin dùng sản phẩm."
+  aspect_handlers:
+    WATERPROOF: "Về độ thẩm thấu và giữ lớp khi gặp nước hoặc mồ hôi, Shop xin ghi nhận phản hồi để tư vấn cách thoa mỏng đều hơn qua kênh Chat sàn ạ."
+    MATERIAL_DURABILITY: "Về độ bền chất liệu vỏ chai, vòi bơm và kết cấu sản phẩm, Shop rất tiếc nếu có sai sót bảo quản và sẵn sàng hỗ trợ kiểm tra đổi mới ngay nếu lỗi từ kho."
+    FIT_SIZE: "Về dung tích và mức độ phù hợp với kích thước/nền da, Shop xin tiếp thu để tư vấn chính xác hơn cho từng loại da ở lần mua tiếp theo."
+    COMFORT_USABILITY: "Về độ dịu nhẹ, thoáng da và mùi hương khi sử dụng, Shop chân thành ghi nhận trải nghiệm riêng của Quý khách và luôn sẵn sàng tư vấn cách dùng êm dịu hơn."
+    PRICE_VALUE: "Shop luôn cam kết cung cấp sản phẩm chính hãng rõ nguồn gốc tương xứng giá trị và thường xuyên có ưu đãi tri ân trên gian hàng."
+    PACKAGING_SHIPPING: "Về khâu đóng gói chống sốc và vận chuyển giao hàng, Shop thành thật xin lỗi nếu hộp bị móp/tràn và xin hỗ trợ xử lý ngay qua Chat của sàn."
+    CUSTOMER_SERVICE: "Shop xin lỗi vì sự chậm trễ trong lúc tư vấn chăm sóc và đã ghi nhận để phản hồi nhanh chóng hơn qua tin nhắn hỗ trợ."
+    ACCESSIBILITY_DESIGN: "Shop cảm ơn nhận xét về màu sắc và thiết kế bao bì để tiếp tục cập nhật hình ảnh swatch thực tế hơn nữa."
+    GENERAL: "Shop đã ghi nhận góp ý của Quý khách và luôn sẵn sàng hỗ trợ chu đáo qua cổng Chat chính thức của sàn trong vòng 24h ạ."
+  closing: "Chúc Quý khách luôn giữ được làn da khỏe đẹp, tươi tắn và nhiều niềm vui!"
+
+# CreBy: MenBoyBMN

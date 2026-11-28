@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from ecomreview.api.auth import SESSION_COOKIE_NAME, hash_password
 from ecomreview.api.main import create_app
-from ecomreview.api.rate_limit import rate_limiter
+from ecomreview.api.rate_limit import account_lockout, rate_limiter
 from ecomreview.db.database import DatabaseManager
 
 
 def _setup_pilot_app(tmp_path, monkeypatch, env: str = "production"):
     rate_limiter.reset()
+    account_lockout.reset()
     monkeypatch.setenv("ECOMREVIEW_ENV", env)
     monkeypatch.setenv("ECOMREVIEW_JWT_SECRET", "super-strong-pilot-jwt-secret-key-at-least-32b")
+    monkeypatch.setenv("ECOMREVIEW_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
     monkeypatch.setenv("ECOMREVIEW_CORS_ORIGINS", "https://pilot.ecomreview.vn")
     monkeypatch.setenv("ECOMREVIEW_TRACE_DIR", str(tmp_path / "traces"))
     monkeypatch.delenv("ECOMREVIEW_API_KEY", raising=False)
@@ -101,6 +104,12 @@ class TestPilotAuthRbacAndIdor:
             create_app(db_path=str(tmp_path / "fail1.db"))
 
         monkeypatch.setenv("ECOMREVIEW_JWT_SECRET", "super-strong-pilot-jwt-secret-key-32chars")
+        monkeypatch.delenv("ECOMREVIEW_ENCRYPTION_KEY", raising=False)
+        monkeypatch.setenv("ECOMREVIEW_CORS_ORIGINS", "https://pilot.ecomreview.vn")
+        with pytest.raises(RuntimeError, match="ECOMREVIEW_ENCRYPTION_KEY"):
+            create_app(db_path=str(tmp_path / "fail_enc.db"))
+
+        monkeypatch.setenv("ECOMREVIEW_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
         monkeypatch.setenv("ECOMREVIEW_CORS_ORIGINS", "*")
         with pytest.raises(RuntimeError, match="ECOMREVIEW_CORS_ORIGINS"):
             create_app(db_path=str(tmp_path / "fail2.db"))

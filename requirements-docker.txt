@@ -15,4 +15,5 @@ redis>=5.0.0
 rq>=1.16.0
 alembic>=1.13.0
 sqlalchemy>=2.0.0
+cryptography>=42.0.0
 # CreBy: MenBoyBMN

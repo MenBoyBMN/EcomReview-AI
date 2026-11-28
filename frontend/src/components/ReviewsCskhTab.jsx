@@ -15,6 +15,7 @@ import {
   UploadCloud,
   MessageSquareText,
   Pencil,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { ASPECT_META, getAspectLabel, getAspectShortLabel } from '../constants/taxonomy';
@@ -57,12 +58,17 @@ export default function ReviewsCskhTab({
   const [editingReplyId, setEditingReplyId] = useState(null);
   const [editedReplyText, setEditedReplyText] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [syncingMarket, setSyncingMarket] = useState(false);
+  const [anomalyOnly, setAnomalyOnly] = useState(false);
+  const [selectedReviewIds, setSelectedReviewIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     setOffset(0);
     setReplyDrafts({});
     setReplyHistoryMap({});
     setOpenHistoryIds(new Set());
+    setSelectedReviewIds(new Set());
     setEditingReplyId(null);
     setEditedReplyText('');
   }, [scenarioTag]);
@@ -91,6 +97,7 @@ export default function ReviewsCskhTab({
         platform,
         aspect,
         polarity,
+        anomalyOnly,
         reviewIds: debouncedSearchId,
         limit,
         offset,
@@ -111,7 +118,17 @@ export default function ReviewsCskhTab({
     return () => {
       active = false;
     };
-  }, [scenarioTag, platform, aspect, polarity, debouncedSearchId, limit, offset, showToast]);
+  }, [
+    scenarioTag,
+    platform,
+    aspect,
+    polarity,
+    anomalyOnly,
+    debouncedSearchId,
+    limit,
+    offset,
+    showToast,
+  ]);
 
   useEffect(() => {
     const cancel = fetchReviews();
@@ -167,6 +184,9 @@ export default function ReviewsCskhTab({
         created_by: updated.created_by,
         created_at: updated.created_at,
         sent_at: updated.sent_at,
+        external_sync_status: updated.external_sync_status || 'LOCAL_ONLY',
+        external_sync_error: updated.external_sync_error || null,
+        external_synced_at: updated.external_synced_at || null,
       };
       setReplyDrafts((prev) => ({ ...prev, [reviewId]: normalized }));
       setReviews((prev) =>
@@ -247,6 +267,135 @@ export default function ReviewsCskhTab({
     }
   };
 
+  const handleSyncMarketplace = async () => {
+    try {
+      setSyncingMarket(true);
+      const res = await api.getShopConnectors(scenarioTag);
+      const active = res?.connections || [];
+      if (active.length === 0) {
+        showToast('Chưa có kết nối Shopee/TikTok. Hãy cấu hình trong mục Kết nối Sàn.', 'info');
+        return;
+      }
+      await Promise.all(active.map((c) => api.syncShopConnector(scenarioTag, c.platform, {})));
+      showToast(`Đã đồng bộ đánh giá mới từ ${active.length} sàn kết nối!`, 'success');
+      fetchReviews();
+    } catch (err) {
+      showToast(err.message || 'Đồng bộ đánh giá từ sàn thất bại', 'error');
+    } finally {
+      setSyncingMarket(false);
+    }
+  };
+
+  const handleRetryPush = async (reviewId, replyId) => {
+    try {
+      setUpdatingStatusId(replyId);
+      const updated = await api.retryPushReply(replyId);
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.review_id === reviewId
+            ? {
+                ...r,
+                latest_reply: {
+                  ...(r.latest_reply || {}),
+                  external_sync_status: updated.external_sync_status,
+                  external_sync_error: updated.external_sync_error || null,
+                },
+              }
+            : r
+        )
+      );
+      showToast('Đã gửi lại yêu cầu đẩy phản hồi lên sàn!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Không thể đẩy phản hồi lên sàn', 'error');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const handleToggleSelectReview = (reviewId) => {
+    setSelectedReviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(reviewId)) next.delete(reviewId);
+      else next.add(reviewId);
+      return next;
+    });
+  };
+
+  const handleSelectAllPage = () => {
+    if (selectedReviewIds.size === reviews.length && reviews.length > 0) {
+      setSelectedReviewIds(new Set());
+    } else {
+      setSelectedReviewIds(new Set(reviews.map((r) => r.review_id)));
+    }
+  };
+
+  const handleBulkDraft = async () => {
+    const ids = Array.from(selectedReviewIds);
+    if (ids.length === 0) return;
+    try {
+      setBulkBusy(true);
+      const res = await api.bulkCreateReplyDrafts({
+        scenario_tag: scenarioTag,
+        review_ids: ids.slice(0, 50),
+        mode: 'template',
+      });
+      showToast(`Đã tạo ${res.created_count || 0} bản nháp CSKH hàng loạt!`, 'success');
+      setSelectedReviewIds(new Set());
+      fetchReviews();
+    } catch (err) {
+      showToast(err.message || 'Không thể tạo nháp hàng loạt', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkSend = async () => {
+    const replyIds = reviews
+      .filter((r) => selectedReviewIds.has(r.review_id))
+      .map((r) => (replyDrafts[r.review_id] || r.latest_reply)?.reply_id)
+      .filter(Boolean);
+    if (replyIds.length === 0) {
+      showToast('Các đánh giá đã chọn chưa có bản nháp. Hãy tạo nháp trước!', 'info');
+      return;
+    }
+    try {
+      setBulkBusy(true);
+      const res = await api.bulkUpdateReplyStatus({
+        scenario_tag: scenarioTag,
+        reply_ids: replyIds.slice(0, 50),
+        status: 'SENT',
+        push_to_marketplace: true,
+      });
+      showToast(`Đã duyệt & gửi ${res.updated_count || 0} phản hồi hàng loạt!`, 'success');
+      setSelectedReviewIds(new Set());
+      fetchReviews();
+    } catch (err) {
+      showToast(err.message || 'Không thể gửi phản hồi hàng loạt', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleAutoReply5Star = async () => {
+    try {
+      setBulkBusy(true);
+      const res = await api.triggerAutoReply5Star({
+        scenario_tag: scenarioTag,
+        limit: 50,
+        push_to_marketplace: true,
+      });
+      showToast(
+        `Đã tự động trả lời ${res.replied_count || 0} đánh giá 5★ sạch (bỏ qua ${res.skipped_count || 0} bài)!`,
+        'success'
+      );
+      fetchReviews();
+    } catch (err) {
+      showToast(err.message || 'Auto-reply 5★ thất bại', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const currentPage = Math.floor(offset / limit) + 1;
 
   return (
@@ -259,10 +408,30 @@ export default function ReviewsCskhTab({
           subtitle="Lọc đánh giá theo sàn hoặc khía cạnh và dùng trợ lý AI để soạn câu trả lời lịch sự, đúng quy định sàn"
           actions={
             userRole !== 'cskh' && (
-              <Button variant="primary" size="sm" onClick={onOpenUploadModal}>
-                <UploadCloud className="w-4 h-4" />
-                <span>Thêm đánh giá mới</span>
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={handleAutoReply5Star}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Auto-reply 5★</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={syncingMarket}
+                  onClick={handleSyncMarketplace}
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncingMarket ? 'animate-spin' : ''}`} />
+                  <span>{syncingMarket ? 'Đang đồng bộ...' : 'Đồng bộ sàn'}</span>
+                </Button>
+                <Button variant="primary" size="sm" onClick={onOpenUploadModal}>
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Thêm đánh giá mới</span>
+                </Button>
+              </div>
             )
           }
         />
@@ -330,6 +499,48 @@ export default function ReviewsCskhTab({
             <option value="neutral">Trung lập</option>
           </select>
         </div>
+
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3 flex-wrap text-xs">
+            <label className="inline-flex items-center gap-1.5 cursor-pointer text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={anomalyOnly}
+                onChange={(e) => {
+                  setAnomalyOnly(e.target.checked);
+                  setOffset(0);
+                }}
+                className="rounded border-slate-300 text-indigo-600"
+              />
+              <span>Chỉ xem đánh giá bất thường (Spam / Seeding / Chê ẩn)</span>
+            </label>
+            {reviews.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSelectAllPage}
+                className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+              >
+                {selectedReviewIds.size === reviews.length
+                  ? 'Bỏ chọn trang này'
+                  : `Chọn cả ${reviews.length} bài trên trang`}
+              </button>
+            )}
+          </div>
+
+          {selectedReviewIds.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                Đã chọn {selectedReviewIds.size}
+              </span>
+              <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={handleBulkDraft}>
+                Tạo nháp hàng loạt
+              </Button>
+              <Button variant="primary" size="sm" disabled={bulkBusy} onClick={handleBulkSend}>
+                Duyệt & Gửi hàng loạt
+              </Button>
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Reviews List */}
@@ -389,12 +600,33 @@ export default function ReviewsCskhTab({
                 {/* Top Header */}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="checkbox"
+                      aria-label={`Chọn đánh giá ${rev.review_id}`}
+                      checked={selectedReviewIds.has(rev.review_id)}
+                      onChange={() => handleToggleSelectReview(rev.review_id)}
+                      className="rounded border-slate-300 text-indigo-600"
+                    />
                     <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
                       #{rev.review_id}
                     </span>
                     <span className={isShopee ? 'badge-shopee' : 'badge-tiktok'}>
                       {isShopee ? 'Shopee' : 'TikTok Shop'}
                     </span>
+                    {rev.variation && (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {rev.variation}
+                      </span>
+                    )}
+                    {(rev.anomaly_flags || []).map((flag) => (
+                      <Badge key={flag} tone="warning">
+                        {flag === 'SPAM_REPEATED_CHARS'
+                          ? 'Spam ký tự'
+                          : flag === 'SEEDING_DUPLICATE'
+                          ? 'Nghi seeding'
+                          : 'Chê ẩn 4–5★'}
+                      </Badge>
+                    ))}
                     <div
                       className="flex items-center gap-0.5 text-amber-400"
                       aria-label={`${rev.rating || 5} sao`}
@@ -508,6 +740,30 @@ export default function ReviewsCskhTab({
                             <InfoTip text="Đã kiểm tra 6 quy tắc G1–G6: (1) Không cam kết quá đà, (2) Không mua chuộc đánh giá 5 sao, (3) Không lộ SĐT/link ngoài sàn, (4) Độ dài chuẩn 40–600 ký tự, (5) Giải đáp đúng điểm khách chê, (6) Không hứa bồi thường tiền trái phép." />
                           </div>
                         ) : null}
+                        {draft.external_sync_status === 'PUSHED' && (
+                          <Badge tone="success">Đã đẩy lên sàn</Badge>
+                        )}
+                        {draft.external_sync_status === 'QUEUED' && (
+                          <Badge tone="info">Đang đẩy lên sàn</Badge>
+                        )}
+                        {draft.external_sync_status === 'FAILED' && (
+                          <div className="flex items-center gap-1.5">
+                            <Badge tone="danger" title={draft.external_sync_error || ''}>
+                              Đẩy sàn lỗi
+                            </Badge>
+                            {draft.reply_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={updatingStatusId === draft.reply_id}
+                                onClick={() => handleRetryPush(rev.review_id, draft.reply_id)}
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                <span>Thử đẩy lại</span>
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">

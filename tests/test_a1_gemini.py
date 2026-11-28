@@ -117,5 +117,58 @@ class TestA1GeminiAnalyzer:
         assert res2.overall_sentiment == res1.overall_sentiment
         analyzer._client.models.generate_content.assert_not_called()
 
+    def test_shared_redis_cache_shares_results_across_workers_with_ttl(self, tmp_path):
+        class _FakeRedis:
+            def __init__(self):
+                self.store = {}
+                self.ttl_map = {}
+
+            def get(self, key):
+                return self.store.get(key)
+
+            def set(self, key, value, ex=None):
+                self.store[key] = value
+                self.ttl_map[key] = ex
+                return True
+
+        fake_redis = _FakeRedis()
+        worker_a = A1GeminiAnalyzer(
+            cache_dir=tmp_path / "cache_a",
+            api_key="dummy_key",
+            redis_client=fake_redis,
+        )
+        worker_b = A1GeminiAnalyzer(
+            cache_dir=tmp_path / "cache_b",
+            api_key="dummy_key",
+            redis_client=fake_redis,
+        )
+
+        text = "Áo mưa chống thấm tốt nhưng hơi nóng"
+        key = worker_a._compute_cache_key(text)
+        worker_a.cache_store.set(
+            key,
+            {
+                "overall_sentiment": "positive",
+                "opinions": [
+                    {
+                        "aspect": "WATERPROOF",
+                        "polarity": "positive",
+                        "evidence": "chống thấm tốt",
+                    }
+                ],
+                "informative": True,
+            },
+        )
+        assert f"ecomreview:absa:{key}" in fake_redis.store
+        assert fake_redis.ttl_map[f"ecomreview:absa:{key}"] >= 60
+
+        # Worker B has empty local disk cache_b, yet gets instant Redis cache hit
+        worker_b._client = MagicMock()
+        res_b = worker_b.analyze_review(text)
+        assert res_b.overall_sentiment == Polarity.POS
+        assert res_b.opinions[0].aspect == Aspect.WATERPROOF
+        worker_b._client.models.generate_content.assert_not_called()
+        assert worker_b.cache_store.stats()["hits_redis"] == 1
+
 
 # CreBy: MenBoyBMN

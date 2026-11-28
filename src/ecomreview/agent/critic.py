@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from ecomreview.agent.insight_engine import verify_numbers_in_statement
+from ecomreview.agent.playbook_loader import resolve_playbook_path
 from ecomreview.schemas import (
     MARKETING_ACTION_TYPES,
     ActionProposal,
@@ -75,17 +76,31 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class HybridCritic:
     """Deterministic R1-R7 Rule Engine + Quality Rubric Evaluator for ActionProposals."""
 
-    def __init__(self, playbook_path: str | Path = "knowledge/playbook_aomua.yaml"):
-        path_obj = Path(playbook_path)
-        self.playbook_path = path_obj if path_obj.is_absolute() else (_PROJECT_ROOT / path_obj)
+    def __init__(
+        self,
+        playbook_path: str | Path = "knowledge/playbook_aomua.yaml",
+        industry: str | None = None,
+        extra_overclaim_keywords: list[str] | None = None,
+    ):
+        default_rel = Path("knowledge/playbook_aomua.yaml")
+        if industry is not None and Path(playbook_path) == default_rel:
+            self.playbook_path = resolve_playbook_path(industry)
+        else:
+            path_obj = Path(playbook_path)
+            self.playbook_path = path_obj if path_obj.is_absolute() else (_PROJECT_ROOT / path_obj)
         guardrails: dict[str, Any] = {}
         if self.playbook_path.exists():
             data = yaml.safe_load(self.playbook_path.read_text(encoding="utf-8")) or {}
             guardrails = data.get("guardrails", {})
 
-        self.overclaim_keywords: list[str] = [
-            k.lower() for k in guardrails.get("overclaim_keywords", DEFAULT_OVERCLAIM_KEYWORDS)
+        merged_overclaim = [
+            str(k).lower() for k in guardrails.get("overclaim_keywords", DEFAULT_OVERCLAIM_KEYWORDS)
         ]
+        for extra_kw in extra_overclaim_keywords or []:
+            kw_l = str(extra_kw).strip().lower()
+            if kw_l and kw_l not in merged_overclaim:
+                merged_overclaim.append(kw_l)
+        self.overclaim_keywords: list[str] = merged_overclaim
         merged_prohibited = list(DEFAULT_PROHIBITED_POLICY_KEYWORDS)
         existing_lower = {k.lower() for k in merged_prohibited}
         for kw in guardrails.get("prohibited_policy_keywords", []):

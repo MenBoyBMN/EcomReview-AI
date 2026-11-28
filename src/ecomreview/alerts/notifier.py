@@ -12,9 +12,96 @@ from typing import Any
 import requests
 
 from ecomreview.db.database import DatabaseManager
-from ecomreview.security import scrub_pii
+from ecomreview.security import scrub_pii, validate_webhook_url
 
 logger = logging.getLogger(__name__)
+
+VALID_WEBHOOK_FORMATS = {"generic", "slack", "lark", "zalo_oa"}
+
+
+def format_webhook_payload(
+    webhook_format: str,
+    *,
+    scenario_tag: str,
+    shop_name: str,
+    severity: str,
+    title: str,
+    clean_message: str,
+    payload: dict[str, Any],
+    recipient_id: str = "",
+) -> dict[str, Any]:
+    """Format an outbound alert payload for Generic, Slack, Lark, or Zalo OA webhooks."""
+    fmt = str(webhook_format or "generic").strip().lower()
+    safe_title = scrub_pii(title)
+    safe_msg = scrub_pii(clean_message)
+    safe_shop = scrub_pii(shop_name)
+
+    if fmt == "slack":
+        header = f"[{severity}] {safe_shop} — {safe_title}"
+        return {
+            "text": f"{header}\n{safe_msg}",
+            "blocks": [
+                {"type": "header", "text": {"type": "plain_text", "text": header[:140]}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": safe_msg[:2800]}},
+                {
+                    "type": "context",
+                    "elements": [
+                        {"type": "mrkdwn", "text": f"Shop: `{scenario_tag}` • Mức độ: *{severity}*"}
+                    ],
+                },
+            ],
+        }
+
+    if fmt == "lark":
+        tpl_color = (
+            "red"
+            if severity.upper() == "HIGH"
+            else ("orange" if severity.upper() == "MEDIUM" else "blue")
+        )
+        return {
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "template": tpl_color,
+                    "title": {
+                        "tag": "plain_text",
+                        "content": f"[{severity}] {safe_shop} — {safe_title}"[:120],
+                    },
+                },
+                "elements": [
+                    {"tag": "div", "text": {"tag": "lark_md", "content": safe_msg[:2800]}},
+                    {
+                        "tag": "note",
+                        "elements": [
+                            {"tag": "plain_text", "content": f"EcomReview AI • {scenario_tag}"}
+                        ],
+                    },
+                ],
+            },
+        }
+
+    if fmt == "zalo_oa":
+        out: dict[str, Any] = {
+            "event_name": "ecomreview_alert",
+            "shop": scenario_tag,
+            "shop_name": safe_shop,
+            "severity": severity,
+            "title": safe_title,
+            "message": safe_msg,
+            "data": payload,
+        }
+        if recipient_id.strip():
+            out["recipient"] = {"user_id": recipient_id.strip()}
+        return out
+
+    return {
+        "shop": scenario_tag,
+        "shop_name": safe_shop,
+        "severity": severity,
+        "title": safe_title,
+        "message": safe_msg,
+        "data": payload,
+    }
 
 
 def _sign_webhook_payload(secret: str, body_bytes: bytes) -> str:
@@ -44,11 +131,18 @@ def send_webhook_alert(
     timeout: int = 8,
 ) -> dict[str, Any]:
     """Send a JSON alert payload to a custom webhook (Zalo OA/n8n/Slack/Lark)."""
+    safe_url = validate_webhook_url(webhook_url)
     body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json; charset=utf-8"}
     if secret:
         headers["X-EcomReview-Signature"] = _sign_webhook_payload(secret, body_bytes)
-    resp = requests.post(webhook_url.strip(), data=body_bytes, headers=headers, timeout=timeout)
+    resp = requests.post(
+        safe_url,
+        data=body_bytes,
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=False,
+    )
     resp.raise_for_status()
     return {"status_code": resp.status_code}
 
@@ -106,18 +200,19 @@ def dispatch_alert(
                 bot_tok, chat_id = target
                 send_telegram_message(bot_tok, chat_id, full_text)
             elif channel_name == "webhook":
-                send_webhook_alert(
-                    target,
-                    {
-                        "shop": scenario_tag,
-                        "shop_name": shop_name,
-                        "severity": severity,
-                        "title": title,
-                        "message": clean_message,
-                        "data": payload,
-                    },
-                    secret=secret,
+                wh_format = str(cfg.get("webhook_format") or "generic").strip().lower()
+                zalo_rcpt = str(cfg.get("zalo_oa_recipient_id") or "").strip()
+                formatted_body = format_webhook_payload(
+                    wh_format,
+                    scenario_tag=scenario_tag,
+                    shop_name=shop_name,
+                    severity=severity,
+                    title=title,
+                    clean_message=clean_message,
+                    payload=payload,
+                    recipient_id=zalo_rcpt,
                 )
+                send_webhook_alert(target, formatted_body, secret=secret)
         except Exception as exc:
             status_val = "FAILED"
             err_msg = str(exc)[:300]

@@ -144,6 +144,7 @@ export default function OverviewTab({
     platform_counts = { shopee: 0, tiktok: 0 },
     aspect_stats = [],
     platform_comparison = [],
+    sku_breakdown = [],
   } = overview;
 
   const posRatePct =
@@ -489,6 +490,56 @@ export default function OverviewTab({
           </div>
         )}
       </Card>
+
+      {sku_breakdown.length > 0 && (
+        <Card>
+          <SectionHeader
+            title="Xếp hạng rủi ro theo SKU & Phân loại hàng"
+            subtitle="Phát hiện phân loại (size/màu) có tỷ lệ phàn nàn hoặc bất thường cao nhất"
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-xs uppercase text-slate-500 dark:text-slate-400">
+                  <th className="py-2.5 px-3">Sản phẩm / SKU</th>
+                  <th className="py-2.5 px-3">Phân loại</th>
+                  <th className="py-2.5 px-3">Đánh giá</th>
+                  <th className="py-2.5 px-3">Điểm TB</th>
+                  <th className="py-2.5 px-3">Tỷ lệ chê (95% CI)</th>
+                  <th className="py-2.5 px-3">Vấn đề chính</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                {sku_breakdown.map((sku) => (
+                  <tr
+                    key={`${sku.product}__${sku.variation}`}
+                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition"
+                  >
+                    <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-white">
+                      {sku.product}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                      {sku.variation}
+                    </td>
+                    <td className="py-2.5 px-3 tabular-nums">{sku.total_reviews}</td>
+                    <td className="py-2.5 px-3 tabular-nums">{sku.avg_rating}★</td>
+                    <td className="py-2.5 px-3 tabular-nums">
+                      <Badge tone={sku.negative_rate_pct >= 30 ? 'danger' : 'neutral'}>
+                        {sku.negative_rate_pct}% ({sku.wilson_ci_low}%–{sku.wilson_ci_high}%)
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 px-3 text-xs text-slate-500">
+                      {sku.top_negative_aspect
+                        ? getAspectShortLabel(sku.top_negative_aspect)
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

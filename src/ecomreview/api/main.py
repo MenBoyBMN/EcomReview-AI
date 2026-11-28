@@ -22,16 +22,20 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
 import re
+import secrets
+import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import jwt
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -53,28 +57,51 @@ from starlette.concurrency import run_in_threadpool
 
 from ecomreview.agent.graph_runner import EcomReviewGraphRunner
 from ecomreview.agent.insight_engine import InsightEngine
-from ecomreview.agent.reply_assistant import check_reply_guardrails, generate_customer_reply
+from ecomreview.agent.playbook_loader import list_industry_templates, normalize_industry
+from ecomreview.agent.reply_assistant import (
+    auto_reply_eligible_five_star_reviews,
+    check_reply_guardrails,
+    generate_customer_reply,
+)
 from ecomreview.agent.tools_aggregator import (
     detect_trend_alerts,
     get_action_impact,
     get_aspect_sentiment_stats,
     get_aspect_trend,
+    get_executive_multi_shop_summary,
     get_hidden_complaints,
     get_platform_comparison,
+    get_sku_variation_stats,
     wilson_ci_pct,
 )
-from ecomreview.alerts.notifier import dispatch_alert, notify_critical_reviews, notify_trend_alerts
+from ecomreview.alerts.notifier import (
+    VALID_WEBHOOK_FORMATS,
+    dispatch_alert,
+    notify_critical_reviews,
+    notify_trend_alerts,
+)
 from ecomreview.analyze.factory import get_analyzer
 from ecomreview.api.auth import (
+    REFRESH_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     create_access_token,
+    generate_refresh_token,
     get_jwt_secret,
     hash_password,
+    hash_token,
     is_production_env,
+    refresh_token_expiry_iso,
     verify_password,
 )
 from ecomreview.api.logging_utils import RequestLoggingMiddleware, configure_logging
-from ecomreview.api.rate_limit import client_ip_from_request, rate_limiter
+from ecomreview.api.metrics import init_sentry_if_configured, metrics_registry
+from ecomreview.api.rate_limit import (
+    account_lockout,
+    client_ip_from_request,
+    rate_limiter,
+    tenant_job_quota,
+    webhook_replay_guard,
+)
 from ecomreview.api.security_deps import (
     VALID_ROLES,
     AuthPrincipal,
@@ -83,6 +110,15 @@ from ecomreview.api.security_deps import (
     get_current_reviewer,
     require_roles,
 )
+from ecomreview.billing.quota_service import (
+    PLAN_CATALOG,
+    QuotaExceededError,
+    current_month_key,
+    record_reply_usage,
+    resolve_subscription,
+)
+from ecomreview.connectors.factory import SUPPORTED_PLATFORMS, get_connector_class
+from ecomreview.crypto import get_encryption_keys
 from ecomreview.db.database import DatabaseManager
 from ecomreview.ingest_service import (
     MAX_ASYNC_UPLOAD_ROWS,
@@ -92,12 +128,18 @@ from ecomreview.ingest_service import (
     parse_review_file,
 )
 from ecomreview.jobs.queue_worker import (
+    PRIORITY_QUEUES,
+    _get_redis_client,
     enqueue_background_job,
+    list_dlq_entries,
     task_ingest_review_batch,
+    task_push_marketplace_reply,
     task_run_analysis,
+    task_sync_marketplace_reviews,
 )
-from ecomreview.reporting import build_excel_report, build_html_report
+from ecomreview.reporting import build_excel_report, build_html_report, build_weekly_digest
 from ecomreview.schemas import Aspect, Polarity
+from ecomreview.security import scrub_pii, validate_webhook_url
 
 logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -118,6 +160,7 @@ class ReviewUploadItem(BaseModel):
     platform: str = "tiktok"
     shop: str = "shop_a"
     product: str = "ao_mua_da_ca"
+    variation: str = ""
     rating: int = Field(default=5, ge=1, le=5)
     text: str = Field(validation_alias=AliasChoices("text", "text_raw"))
     overall_sentiment: str | None = None
@@ -186,6 +229,7 @@ class ReviewReplyStatusRequest(BaseModel):
 
     status: str = Field(description="DRAFT, APPROVED, or SENT")
     reply_text: str | None = None
+    push_to_marketplace: bool = True
 
 
 class LoginRequest(BaseModel):
@@ -210,9 +254,24 @@ class UpdateShopAlertsRequest(BaseModel):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     webhook_url: str | None = None
+    webhook_format: str | None = None
+    zalo_oa_recipient_id: str | None = None
+    weekly_digest_enabled: bool | None = None
     min_rating_alert: int = Field(default=2, ge=1, le=5)
     enable_critical_review_alert: bool = True
     enable_ztest_alert: bool = True
+    auto_reply_5star_enabled: bool | None = None
+
+
+class UpdateShopProfileRequest(BaseModel):
+    """Industry template and per-shop CSKH/Planner Brand Voice configuration."""
+
+    industry: str | None = None
+    tone: str | None = Field(default=None, max_length=200)
+    shop_signature: str | None = Field(default=None, max_length=120)
+    return_policy: str | None = Field(default=None, max_length=200)
+    cskh_notes: str | None = Field(default=None, max_length=400)
+    custom_overclaim_keywords: list[str] | None = None
 
 
 class CreateUserRequest(BaseModel):
@@ -237,6 +296,108 @@ class AlertStatusUpdateRequest(BaseModel):
     """Payload to acknowledge or resolve an outbound alert dispatch."""
 
     status: str = Field(description="ACK or RESOLVED")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Payload to change the authenticated user's password."""
+
+    current_password: str = Field(min_length=1, max_length=160)
+    new_password: str = Field(min_length=8, max_length=160)
+
+
+class UpdateUserStatusRequest(BaseModel):
+    """Admin payload to activate or suspend a user account."""
+
+    is_active: bool
+
+
+class CreateShopApiKeyRequest(BaseModel):
+    """Payload to mint a scoped API key restricted to a single shop."""
+
+    name: str = Field(min_length=2, max_length=120)
+    role: str = Field(default="owner", description="'owner' or 'cskh'")
+    scopes: list[str] = Field(default_factory=lambda: ["read", "write"])
+
+
+class RefreshTokenRequest(BaseModel):
+    """Optional JSON body for refresh token rotation when not using cookies."""
+
+    refresh_token: str | None = None
+
+
+class AuthorizeConnectorRequest(BaseModel):
+    """Payload to generate an OAuth authorization URL for Shopee or TikTok Shop."""
+
+    redirect_url: str = Field(min_length=8, max_length=500)
+
+
+class ManualConnectorRequest(BaseModel):
+    """Payload to save or update a shop marketplace connection directly."""
+
+    external_shop_id: str = Field(min_length=1, max_length=120)
+    access_token: str = Field(min_length=4, max_length=1000)
+    refresh_token: str | None = None
+    expires_in_seconds: int = Field(default=14400, ge=60, le=31536000)
+    shop_name: str | None = None
+    auto_sync_enabled: bool = True
+    sync_interval_minutes: int = Field(default=30, ge=5, le=1440)
+
+
+class SyncConnectorRequest(BaseModel):
+    """Payload to trigger an on-demand marketplace review sync."""
+
+    analyzer_method: str = "a1_gemini_v2"
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class BulkReplyDraftRequest(BaseModel):
+    """Payload to generate G1-G6 CSKH reply drafts for up to 50 reviews."""
+
+    scenario_tag: str = "real_shop"
+    review_ids: list[str] = Field(min_length=1, max_length=50)
+    mode: str = "template"
+
+
+class BulkReplyStatusRequest(BaseModel):
+    """Payload to approve or send up to 50 CSKH reply drafts in one batch."""
+
+    scenario_tag: str = "real_shop"
+    reply_ids: list[int] = Field(min_length=1, max_length=50)
+    status: str = Field(description="APPROVED or SENT")
+    push_to_marketplace: bool = True
+
+
+class AutoReply5StarRequest(BaseModel):
+    """Payload to trigger G1-G6 compliant auto-reply for clean 5-star reviews."""
+
+    scenario_tag: str = "real_shop"
+    review_ids: list[str] | None = None
+    limit: int = Field(default=50, ge=1, le=100)
+    push_to_marketplace: bool = True
+
+
+class RegisterTrialRequest(BaseModel):
+    """Self-service 14-day trial workspace signup payload."""
+
+    email: str = Field(min_length=3, max_length=160)
+    password: str = Field(min_length=6, max_length=160)
+    full_name: str = Field(min_length=1, max_length=120)
+    shop_name: str = Field(min_length=2, max_length=120)
+    shop_slug: str | None = Field(default=None, max_length=64)
+    industry: str = "raincoat"
+    seed_sample_data: bool = True
+
+
+class AdminUpdateSubscriptionRequest(BaseModel):
+    """Admin payload to assign or upgrade a tenant SaaS subscription package."""
+
+    plan_code: str = Field(default="basic")
+    status: str = Field(default="ACTIVE")
+    monthly_llm_review_limit: int | None = Field(default=None, ge=0, le=5000000)
+    max_shops: int | None = Field(default=None, ge=1, le=1000)
+    max_users: int | None = Field(default=None, ge=1, le=1000)
+    overage_policy: str = Field(default="fallback_b1")
+    notes: str | None = Field(default=None, max_length=500)
 
 
 def _is_sla_overdue(rating: int, reply_status: str, created_at: str | None) -> bool:
@@ -356,6 +517,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     if is_production_env():
         get_jwt_secret()
+        get_encryption_keys()
         if resolved_origins == ["*"]:
             raise RuntimeError(
                 "ECOMREVIEW_CORS_ORIGINS cannot be '*' when ECOMREVIEW_ENV=production."
@@ -364,6 +526,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
         configure_logging()
+        init_sentry_if_configured()
         try:
             yield
         finally:
@@ -390,17 +553,85 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     resolved_db_path = db_path or os.getenv("ECOMREVIEW_SQLITE_PATH")
     db_instance = DatabaseManager(db_path=resolved_db_path)
+    app.state.db = db_instance
 
     def _get_db() -> DatabaseManager:
         return db_instance
 
+    def _resolve_cookie_secure() -> bool:
+        raw_secure = os.getenv("ECOMREVIEW_COOKIE_SECURE", "").strip().lower()
+        if raw_secure in {"true", "1", "yes"}:
+            return True
+        if raw_secure in {"false", "0", "no"}:
+            return False
+        return is_production_env()
+
+    def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+        cookie_secure = _resolve_cookie_secure()
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=access_token,
+            httponly=True,
+            samesite="lax",
+            secure=cookie_secure,
+            max_age=12 * 3600,
+            path="/",
+        )
+        response.set_cookie(
+            key=REFRESH_COOKIE_NAME,
+            value=refresh_token,
+            httponly=True,
+            samesite="lax",
+            secure=cookie_secure,
+            max_age=14 * 24 * 3600,
+            path="/api/v1/auth",
+        )
+
+    def _clear_auth_cookies(response: Response) -> None:
+        response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+        response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/api/v1/auth")
+
+    def _record_audit(
+        request: Request,
+        actor: str,
+        actor_role: str,
+        action: str,
+        scenario_tag: str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        try:
+            db_instance.record_audit_log(
+                actor=actor,
+                actor_role=actor_role,
+                action=action,
+                scenario_tag=scenario_tag,
+                target_type=target_type,
+                target_id=target_id,
+                ip_address=client_ip_from_request(request),
+                request_id=getattr(request.state, "request_id", None),
+                details=details,
+            )
+        except Exception as exc:
+            logger.warning("Failed to record audit log (%s): %s", action, exc)
+
     # --- Pilot Authentication, Shop Management & Webhook Ingestion ---
     @app.post("/api/v1/auth/login", tags=["Auth"])
     def auth_login(payload: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
-        """Authenticate a Pilot user and issue an HttpOnly JWT session cookie."""
+        """Authenticate a Pilot user and issue HttpOnly JWT + Refresh cookies."""
         rate_limiter.check(
-            f"login:{client_ip_from_request(request)}", max_requests=10, window_seconds=60
+            f"login:{client_ip_from_request(request)}", max_requests=20, window_seconds=60
         )
+        locked_sec = account_lockout.is_locked(payload.email)
+        if locked_sec > 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. "
+                    f"Vui lòng thử lại sau {locked_sec} giây."
+                ),
+            )
         db = _get_db()
         user = db.get_user_by_email(payload.email, include_hash=True)
         if (
@@ -408,40 +639,297 @@ def create_app(db_path: str | None = None) -> FastAPI:
             or not user["is_active"]
             or not verify_password(payload.password, user["password_hash"])
         ):
+            account_lockout.record_failure(payload.email)
+            _record_audit(
+                request,
+                actor=payload.email.strip().lower()[:160] or "anonymous",
+                actor_role="anonymous",
+                action="auth.login_failed",
+                target_type="user",
+                target_id=payload.email.strip().lower(),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email hoặc mật khẩu không chính xác.",
             )
+
+        account_lockout.clear(payload.email)
         token = create_access_token(user)
+        raw_refresh, refresh_hash = generate_refresh_token()
+        family_id = secrets.token_hex(16)
+        db.create_refresh_token(
+            user_id=int(user["id"]),
+            token_hash=refresh_hash,
+            family_id=family_id,
+            expires_at=refresh_token_expiry_iso(),
+        )
         db.update_user_last_login(int(user["id"]))
-        raw_secure = os.getenv("ECOMREVIEW_COOKIE_SECURE", "").strip().lower()
-        if raw_secure in {"true", "1", "yes"}:
-            cookie_secure = True
-        elif raw_secure in {"false", "0", "no"}:
-            cookie_secure = False
-        else:
-            cookie_secure = is_production_env()
-        response.set_cookie(
-            key=SESSION_COOKIE_NAME,
-            value=token,
-            httponly=True,
-            samesite="lax",
-            secure=cookie_secure,
-            max_age=12 * 3600,
-            path="/",
+        _set_auth_cookies(response, token, raw_refresh)
+        _record_audit(
+            request,
+            actor=str(user["email"]),
+            actor_role=str(user["role"]),
+            action="auth.login",
+            target_type="user",
+            target_id=str(user["id"]),
         )
         public_user = {k: v for k, v in user.items() if k != "password_hash"}
         return {
             "access_token": token,
+            "refresh_token": raw_refresh,
             "token_type": "bearer",
             "user": public_user,
         }
 
+    @app.post("/api/v1/auth/refresh", tags=["Auth"])
+    def auth_refresh(
+        request: Request,
+        response: Response,
+        payload: RefreshTokenRequest | None = None,
+    ) -> dict[str, Any]:
+        """Rotate refresh token and issue a fresh JWT access token."""
+        raw_rt = (payload.refresh_token or "").strip() if payload and payload.refresh_token else ""
+        if not raw_rt:
+            raw_rt = (request.cookies.get(REFRESH_COOKIE_NAME) or "").strip()
+        if not raw_rt:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Thiếu refresh token.",
+            )
+
+        db = _get_db()
+        new_raw_rt, new_rt_hash = generate_refresh_token()
+        rot = db.rotate_refresh_token(
+            old_token_hash=hash_token(raw_rt),
+            new_token_hash=new_rt_hash,
+            new_expires_at=refresh_token_expiry_iso(),
+        )
+        if rot.get("status") != "ok":
+            _clear_auth_cookies(response)
+            _record_audit(
+                request,
+                actor=f"user:{rot.get('user_id', 'unknown')}",
+                actor_role="anonymous",
+                action="auth.refresh_rejected",
+                target_type="refresh_token",
+                details={"reason": rot.get("status")},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Phiên làm mới không hợp lệ hoặc đã bị thu hồi.",
+            )
+
+        user = db.get_user_by_id(int(rot["user_id"]))
+        if not user or not user.get("is_active"):
+            _clear_auth_cookies(response)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tài khoản đã bị vô hiệu hóa.",
+            )
+
+        new_access = create_access_token(user)
+        _set_auth_cookies(response, new_access, new_raw_rt)
+        _record_audit(
+            request,
+            actor=str(user["email"]),
+            actor_role=str(user["role"]),
+            action="auth.refresh",
+            target_type="user",
+            target_id=str(user["id"]),
+        )
+        return {
+            "access_token": new_access,
+            "refresh_token": new_raw_rt,
+            "token_type": "bearer",
+            "user": user,
+        }
+
     @app.post("/api/v1/auth/logout", tags=["Auth"])
-    def auth_logout(response: Response) -> dict[str, Any]:
-        """Clear the HttpOnly JWT session cookie."""
-        response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    def auth_logout(request: Request, response: Response) -> dict[str, Any]:
+        """Revoke refresh token and clear HttpOnly session cookies."""
+        raw_rt = (request.cookies.get(REFRESH_COOKIE_NAME) or "").strip()
+        if raw_rt:
+            _get_db().revoke_refresh_token(hash_token(raw_rt))
+        _clear_auth_cookies(response)
+        _record_audit(
+            request,
+            actor="session_cookie",
+            actor_role="user",
+            action="auth.logout",
+        )
         return {"status": "logged_out"}
+
+    @app.post("/api/v1/auth/register-trial", tags=["Auth"])
+    def auth_register_trial(
+        payload: RegisterTrialRequest,
+        request: Request,
+        response: Response,
+    ) -> dict[str, Any]:
+        """Self-service 14-day trial signup creating an Owner, first shop, and trial quota."""
+        if os.getenv("ECOMREVIEW_ALLOW_SELF_SIGNUP", "true").strip().lower() not in {
+            "true",
+            "1",
+            "yes",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tính năng tự đăng ký dùng thử hiện đang tạm khóa.",
+            )
+        rate_limiter.check(
+            f"register_trial:{client_ip_from_request(request)}", max_requests=10, window_seconds=300
+        )
+
+        clean_email = payload.email.strip().lower()
+        raw_slug = (payload.shop_slug or payload.shop_name).strip().lower()
+        clean_slug = re.sub(r"[^a-zA-Z0-9_\-]+", "_", raw_slug).strip("_")[:64]
+        if len(clean_slug) < 2:
+            clean_slug = f"shop_{secrets.token_hex(4)}"
+
+        db = _get_db()
+        if db.get_user_by_email(clean_email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email này đã được đăng ký tài khoản.",
+            )
+        if db.get_pilot_shop(clean_slug):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Mã gian hàng '{clean_slug}' đã tồn tại. Vui lòng chọn mã khác.",
+            )
+
+        norm_ind = normalize_industry(payload.industry)
+        shop = db.create_pilot_shop(
+            slug=clean_slug,
+            name=payload.shop_name.strip(),
+            industry=norm_ind,
+            platforms=["shopee", "tiktok"],
+        )
+        user = db.upsert_user(
+            email=clean_email,
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name.strip(),
+            role="owner",
+            allowed_shops=[clean_slug],
+        )
+        trial_plan = PLAN_CATALOG["trial"]
+        trial_end = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+        subscription = db.upsert_tenant_subscription(
+            tenant_key=clean_slug,
+            plan_code="trial",
+            status="TRIAL",
+            monthly_llm_review_limit=trial_plan["monthly_llm_review_limit"],
+            max_shops=trial_plan["max_shops"],
+            max_users=trial_plan["max_users"],
+            overage_policy="fallback_b1",
+            trial_ends_at=trial_end,
+            notes="Self-service 14-day trial",
+            updated_by=clean_email,
+        )
+
+        if payload.seed_sample_data:
+            today_s = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            starter_reviews = [
+                {
+                    "review_id": f"{clean_slug}_demo_1",
+                    "platform": "shopee",
+                    "shop": clean_slug,
+                    "product": "san_pham_chu_luc",
+                    "rating": 2,
+                    "text": "Đóng gói hơi móp hộp, giao hàng chậm hơn dự kiến nhưng chất liệu ổn.",
+                    "created_at": today_s,
+                },
+                {
+                    "review_id": f"{clean_slug}_demo_2",
+                    "platform": "tiktok",
+                    "shop": clean_slug,
+                    "product": "san_pham_chu_luc",
+                    "rating": 5,
+                    "text": "Kiểu dáng màu sắc đẹp y hình, giá cả hợp lý đáng tiền lắm ạ.",
+                    "created_at": today_s,
+                },
+                {
+                    "review_id": f"{clean_slug}_demo_3",
+                    "platform": "shopee",
+                    "shop": clean_slug,
+                    "product": "san_pham_chu_luc",
+                    "rating": 5,
+                    "text": "Shop tư vấn nhiệt tình, sản phẩm dùng tiện lợi rất hài lòng.",
+                    "created_at": today_s,
+                },
+            ]
+            ingest_review_batch(
+                db=db,
+                reviews=starter_reviews,
+                scenario_tag=clean_slug,
+                analyzer_method="b1_rule",
+            )
+
+        token = create_access_token(user)
+        raw_refresh, refresh_hash = generate_refresh_token()
+        db.create_refresh_token(
+            user_id=int(user["id"]),
+            token_hash=refresh_hash,
+            family_id=secrets.token_hex(16),
+            expires_at=refresh_token_expiry_iso(),
+        )
+        _set_auth_cookies(response, token, raw_refresh)
+        _record_audit(
+            request,
+            actor=clean_email,
+            actor_role="owner",
+            action="auth.register_trial",
+            scenario_tag=clean_slug,
+            target_type="pilot_shop",
+            target_id=clean_slug,
+            details={"industry": norm_ind, "plan_code": "trial"},
+        )
+        return {
+            "status": "registered",
+            "user": {
+                "email": user["email"],
+                "full_name": user["full_name"],
+                "role": user["role"],
+                "allowed_shops": user["allowed_shops"],
+            },
+            "shop": {
+                "slug": shop["slug"],
+                "name": shop["name"],
+                "industry": shop["industry"],
+            },
+            "subscription": subscription,
+        }
+
+    @app.post("/api/v1/auth/change-password", tags=["Auth"])
+    def auth_change_password(
+        payload: ChangePasswordRequest,
+        request: Request,
+        response: Response,
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Change password for current user and revoke all previously issued sessions."""
+        if principal.user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Chỉ tài khoản người dùng mới hỗ trợ đổi mật khẩu.",
+            )
+        db = _get_db()
+        user = db.get_user_by_id(principal.user_id, include_hash=True)
+        if not user or not verify_password(payload.current_password, user["password_hash"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu hiện tại không chính xác.",
+            )
+        db.update_user_password(principal.user_id, hash_password(payload.new_password))
+        _clear_auth_cookies(response)
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="auth.change_password",
+            target_type="user",
+            target_id=str(principal.user_id),
+        )
+        return {"status": "password_changed"}
 
     @app.get("/api/v1/auth/me", tags=["Auth"])
     def auth_me(principal: AuthPrincipal = Depends(get_current_principal)) -> dict[str, Any]:
@@ -458,6 +946,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "env": os.getenv("ECOMREVIEW_ENV", "development").strip().lower(),
         }
 
+    @app.get("/api/v1/industries", tags=["Pilot Management"])
+    def get_industry_templates(
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """List supported multi-industry Playbook templates and aspect labels."""
+        return {"industries": list_industry_templates()}
+
     @app.get("/api/v1/shops", tags=["Pilot Management"])
     def list_shops(principal: AuthPrincipal = Depends(get_current_principal)) -> dict[str, Any]:
         """List active Pilot shops accessible to the authenticated user."""
@@ -467,17 +962,18 @@ def create_app(db_path: str | None = None) -> FastAPI:
         sanitized = []
         for s in shops:
             acfg = dict(s.get("alert_config") or {})
-            if acfg.get("telegram_bot_token"):
-                acfg["telegram_bot_token_configured"] = True
-                acfg["telegram_bot_token"] = ""
-            else:
-                acfg["telegram_bot_token_configured"] = False
+            has_tg = bool(
+                acfg.get("telegram_bot_token_configured") or acfg.get("telegram_bot_token")
+            )
+            acfg["telegram_bot_token_configured"] = has_tg
+            acfg["telegram_bot_token"] = ""
             sanitized.append({**s, "alert_config": acfg})
         return {"count": len(sanitized), "shops": sanitized}
 
     @app.post("/api/v1/shops", tags=["Pilot Management"])
     def create_shop(
         payload: CreateShopRequest,
+        request: Request,
         principal: AuthPrincipal = Depends(require_roles("admin")),
     ) -> dict[str, Any]:
         """Register a new Pilot shop workspace (Admin only)."""
@@ -485,8 +981,17 @@ def create_app(db_path: str | None = None) -> FastAPI:
         shop = db.create_pilot_shop(
             slug=payload.slug,
             name=payload.name,
-            industry=payload.industry,
+            industry=normalize_industry(payload.industry),
             platforms=payload.platforms,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="shop.create",
+            scenario_tag=shop["slug"],
+            target_type="pilot_shop",
+            target_id=shop["slug"],
         )
         return shop
 
@@ -494,6 +999,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def update_shop_alerts(
         slug: str,
         payload: UpdateShopAlertsRequest,
+        request: Request,
         principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
     ) -> dict[str, Any]:
         """Configure Telegram Bot / Webhook outbound alerting for a Pilot shop."""
@@ -510,12 +1016,133 @@ def create_app(db_path: str | None = None) -> FastAPI:
             patch["telegram_bot_token"] = payload.telegram_bot_token.strip()
         if payload.telegram_chat_id is not None:
             patch["telegram_chat_id"] = payload.telegram_chat_id.strip()
+        if payload.auto_reply_5star_enabled is not None:
+            patch["auto_reply_5star_enabled"] = bool(payload.auto_reply_5star_enabled)
+        if payload.webhook_format is not None:
+            fmt = payload.webhook_format.strip().lower()
+            if fmt not in VALID_WEBHOOK_FORMATS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"webhook_format must be one of {sorted(VALID_WEBHOOK_FORMATS)}",
+                )
+            patch["webhook_format"] = fmt
+        if payload.zalo_oa_recipient_id is not None:
+            patch["zalo_oa_recipient_id"] = payload.zalo_oa_recipient_id.strip()[:120]
+        if payload.weekly_digest_enabled is not None:
+            patch["weekly_digest_enabled"] = bool(payload.weekly_digest_enabled)
         if payload.webhook_url is not None:
-            patch["webhook_url"] = payload.webhook_url.strip()
+            raw_wh = payload.webhook_url.strip()
+            if raw_wh:
+                try:
+                    patch["webhook_url"] = validate_webhook_url(raw_wh)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+            else:
+                patch["webhook_url"] = ""
         updated = db.update_pilot_shop_alerts(slug, patch)
         if not updated:
             raise HTTPException(status_code=404, detail=f"Shop '{slug}' not found.")
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="shop.alerts_update",
+            scenario_tag=slug,
+            target_type="pilot_shop",
+            target_id=slug,
+            details={"min_rating_alert": payload.min_rating_alert},
+        )
         return updated
+
+    @app.patch("/api/v1/shops/{slug}/profile", tags=["Pilot Management"])
+    def update_shop_profile(
+        slug: str,
+        payload: UpdateShopProfileRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Update shop industry Playbook template and Brand Voice profile."""
+        assert_shop_access(principal, slug)
+        db = _get_db()
+        if not db.get_pilot_shop(slug):
+            db.create_pilot_shop(slug=slug, name=slug)
+
+        norm_ind = normalize_industry(payload.industry) if payload.industry is not None else None
+        bv_patch: dict[str, Any] = {}
+        if payload.tone is not None:
+            bv_patch["tone"] = scrub_pii(payload.tone.strip())
+        if payload.shop_signature is not None:
+            bv_patch["shop_signature"] = scrub_pii(payload.shop_signature.strip())
+        if payload.return_policy is not None:
+            bv_patch["return_policy"] = scrub_pii(payload.return_policy.strip())
+        if payload.cskh_notes is not None:
+            bv_patch["cskh_notes"] = scrub_pii(payload.cskh_notes.strip())
+        if payload.custom_overclaim_keywords is not None:
+            bv_patch["custom_overclaim_keywords"] = [
+                scrub_pii(str(k).strip())[:80]
+                for k in payload.custom_overclaim_keywords[:30]
+                if str(k).strip()
+            ]
+
+        updated = db.update_pilot_shop_profile(
+            slug,
+            industry=norm_ind,
+            brand_voice=bv_patch if bv_patch else None,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Shop '{slug}' not found.")
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="shop.profile_update",
+            scenario_tag=slug,
+            target_type="pilot_shop",
+            target_id=slug,
+            details={"industry": updated.get("industry")},
+        )
+        return updated
+
+    @app.post("/api/v1/shops/{slug}/digest/send", tags=["Pilot Management"])
+    def send_shop_weekly_digest(
+        slug: str,
+        request: Request,
+        force: bool = Query(default=False),
+        preview_only: bool = Query(default=False),
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Compile verified weekly KPI digest and optionally dispatch to Telegram/Webhook."""
+        assert_shop_access(principal, slug)
+        db = _get_db()
+        digest = build_weekly_digest(scenario_tag=slug, db=db)
+        dispatches: list[dict[str, Any]] = []
+        if not preview_only:
+            dedup_key = f"weekly_digest:{slug}:{digest['week_key']}"
+            dispatches = dispatch_alert(
+                db=db,
+                scenario_tag=slug,
+                dedup_key=dedup_key,
+                severity="INFO",
+                title=digest["title"],
+                message_text=digest["message_text"],
+                payload={
+                    "type": "weekly_digest",
+                    "week_key": digest["week_key"],
+                    **digest["metrics"],
+                },
+                force=force,
+            )
+            _record_audit(
+                request,
+                actor=principal.email,
+                actor_role=principal.role,
+                action="shop.weekly_digest_send",
+                scenario_tag=slug,
+                target_type="pilot_shop",
+                target_id=slug,
+                details={"week_key": digest["week_key"], "force": force},
+            )
+        return {"shop": slug, "digest": digest, "dispatches": dispatches}
 
     @app.post("/api/v1/shops/{slug}/alerts/test", tags=["Pilot Management"])
     def test_shop_alerts(
@@ -590,6 +1217,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post("/api/v1/users", tags=["Pilot Management"])
     def create_user(
         payload: CreateUserRequest,
+        request: Request,
         principal: AuthPrincipal = Depends(require_roles("admin")),
     ) -> dict[str, Any]:
         """Provision a Pilot user account with role and allowed shops (Admin only)."""
@@ -599,12 +1227,604 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 status_code=400, detail=f"role must be one of {sorted(VALID_ROLES)}"
             )
         db = _get_db()
-        return db.upsert_user(
+        created = db.upsert_user(
             email=payload.email,
             password_hash=hash_password(payload.password),
             full_name=payload.full_name,
             role=role,
             allowed_shops=payload.allowed_shops,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="user.upsert",
+            target_type="user",
+            target_id=str(created["id"]),
+            details={"email": created["email"], "role": role},
+        )
+        return created
+
+    @app.patch("/api/v1/users/{user_id}/status", tags=["Pilot Management"])
+    def update_user_status(
+        user_id: int,
+        payload: UpdateUserStatusRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """Activate or suspend a user; suspending immediately invalidates existing tokens."""
+        db = _get_db()
+        updated = db.set_user_active(user_id=user_id, is_active=payload.is_active)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="user.status_update",
+            target_type="user",
+            target_id=str(user_id),
+            details={"is_active": payload.is_active},
+        )
+        return updated
+
+    @app.get("/api/v1/team/users", tags=["Pilot Management"])
+    def list_team_users(
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """List CSKH team members scoped cleanly to the Owner's authorized shops."""
+        db = _get_db()
+        all_users = db.list_users()
+        if principal.is_admin:
+            return {"count": len(all_users), "users": all_users}
+
+        owner_shops = set(principal.allowed_shops)
+        scoped = []
+        for u in all_users:
+            u_shops = set(u.get("allowed_shops") or [])
+            if str(u["email"]).lower() == principal.email.lower():
+                scoped.append(u)
+            elif str(u["role"]).lower() == "cskh" and u_shops and u_shops.issubset(owner_shops):
+                scoped.append(u)
+        return {"count": len(scoped), "users": scoped}
+
+    @app.post("/api/v1/team/users", tags=["Pilot Management"])
+    def create_team_user(
+        payload: CreateUserRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Allow an Owner to provision CSKH staff strictly within their allowed shops."""
+        db = _get_db()
+        req_role = payload.role.strip().lower()
+        clean_email = payload.email.strip().lower()
+        target_shops = [str(s).strip() for s in payload.allowed_shops if str(s).strip()]
+
+        if not principal.is_admin:
+            if req_role != "cskh":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Chủ shop chỉ được phép tạo tài khoản nhân viên CSKH.",
+                )
+            if not target_shops or not set(target_shops).issubset(set(principal.allowed_shops)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Chỉ được phân quyền nhân viên cho các gian hàng thuộc sở hữu của bạn.",
+                )
+            existing_u = db.get_user_by_email(clean_email, include_hash=False)
+            if existing_u is not None:
+                ex_shops = set(existing_u.get("allowed_shops") or [])
+                if str(existing_u["role"]).lower() != "cskh" or not ex_shops.issubset(
+                    set(principal.allowed_shops)
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Email này thuộc quyền quản lý khác hoặc có vai trò cao hơn CSKH.",
+                    )
+            else:
+                sub = resolve_subscription(db, [*principal.allowed_shops, principal.email])
+                owner_shops = set(principal.allowed_shops)
+                cur_team = [
+                    u
+                    for u in db.list_users()
+                    if str(u["email"]).lower() == principal.email.lower()
+                    or (
+                        str(u["role"]).lower() == "cskh"
+                        and set(u.get("allowed_shops") or []).issubset(owner_shops)
+                    )
+                ]
+                if len(cur_team) >= int(sub.get("max_users") or 3):
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail=(
+                            f"Đã đạt giới hạn {sub['max_users']} tài khoản của gói "
+                            f"{sub['plan_code'].upper()}. Vui lòng nâng cấp gói để thêm nhân sự."
+                        ),
+                    )
+        else:
+            if req_role not in VALID_ROLES:
+                raise HTTPException(
+                    status_code=400, detail=f"role must be one of {sorted(VALID_ROLES)}"
+                )
+
+        created = db.upsert_user(
+            email=clean_email,
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name,
+            role=req_role,
+            allowed_shops=target_shops,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="team.user_create",
+            target_type="user",
+            target_id=str(created["id"]),
+            details={"email": created["email"], "role": req_role, "allowed_shops": target_shops},
+        )
+        return created
+
+    @app.patch("/api/v1/team/users/{user_id}/status", tags=["Pilot Management"])
+    def update_team_user_status(
+        user_id: int,
+        payload: UpdateUserStatusRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Allow an Owner to activate/suspend their own CSKH staff (revoking tokens)."""
+        db = _get_db()
+        target_user = db.get_user_by_id(user_id)
+        if not target_user:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+        if not principal.is_admin:
+            t_shops = set(target_user.get("allowed_shops") or [])
+            if (
+                str(target_user["role"]).lower() != "cskh"
+                or not t_shops
+                or not t_shops.issubset(set(principal.allowed_shops))
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn không có quyền thay đổi trạng thái tài khoản này.",
+                )
+
+        updated = db.set_user_active(user_id=user_id, is_active=payload.is_active)
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="team.user_status_update",
+            target_type="user",
+            target_id=str(user_id),
+            details={"is_active": payload.is_active},
+        )
+        return updated
+
+    @app.post("/api/v1/workspace/shops", tags=["Pilot Management"])
+    def create_workspace_shop(
+        payload: CreateShopRequest,
+        request: Request,
+        response: Response,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Create a new shop within the Owner/Agency workspace plan limits."""
+        db = _get_db()
+        clean_slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", payload.slug.strip().lower())[:64]
+        if len(clean_slug) < 2:
+            raise HTTPException(status_code=400, detail="Mã gian hàng phải có ít nhất 2 ký tự.")
+        if db.get_pilot_shop(clean_slug):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Mã gian hàng '{clean_slug}' đã tồn tại.",
+            )
+
+        if not principal.is_admin:
+            sub = resolve_subscription(db, [*principal.allowed_shops, principal.email])
+            current_shops = db.list_pilot_shops(allowed_slugs=principal.allowed_shops)
+            if len(current_shops) >= int(sub.get("max_shops") or 2):
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=(
+                        f"Đã đạt giới hạn {sub['max_shops']} gian hàng của gói "
+                        f"{sub['plan_code'].upper()}. Vui lòng nâng cấp lên Pro hoặc Agency."
+                    ),
+                )
+
+        norm_ind = normalize_industry(payload.industry)
+        shop = db.create_pilot_shop(
+            slug=clean_slug,
+            name=payload.name,
+            industry=norm_ind,
+            platforms=payload.platforms,
+        )
+
+        if not principal.is_admin:
+            user_rec = db.get_user_by_email(principal.email, include_hash=False)
+            if user_rec:
+                new_allowed = [*user_rec["allowed_shops"], clean_slug]
+                updated_user = db.update_user_allowed_shops(int(user_rec["id"]), new_allowed)
+                if updated_user:
+                    new_token = create_access_token(updated_user)
+                    response.set_cookie(
+                        key=SESSION_COOKIE_NAME,
+                        value=new_token,
+                        httponly=True,
+                        samesite="lax",
+                        secure=_resolve_cookie_secure(),
+                        max_age=12 * 3600,
+                        path="/",
+                    )
+
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="workspace.shop_create",
+            scenario_tag=clean_slug,
+            target_type="pilot_shop",
+            target_id=clean_slug,
+            details={"industry": norm_ind},
+        )
+        return shop
+
+    @app.get("/api/v1/shops/{slug}/api-keys", tags=["Pilot Management"])
+    def list_shop_api_keys(
+        slug: str,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """List scoped API keys for a shop (hashes are never returned)."""
+        assert_shop_access(principal, slug)
+        items = _get_db().list_shop_api_keys(slug)
+        return {"scenario_tag": slug, "count": len(items), "api_keys": items}
+
+    @app.post("/api/v1/shops/{slug}/api-keys", tags=["Pilot Management"])
+    def create_shop_api_key_endpoint(
+        slug: str,
+        payload: CreateShopApiKeyRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Mint a new API key restricted strictly to one shop."""
+        assert_shop_access(principal, slug)
+        db = _get_db()
+        try:
+            created = db.create_shop_api_key(
+                scenario_tag=slug,
+                name=payload.name,
+                role=payload.role,
+                scopes=payload.scopes,
+                created_by=principal.email,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="shop.api_key_create",
+            scenario_tag=slug,
+            target_type="shop_api_key",
+            target_id=str(created["id"]),
+            details={"key_prefix": created["key_prefix"], "role": created["role"]},
+        )
+        return created
+
+    @app.delete("/api/v1/shops/{slug}/api-keys/{key_id}", tags=["Pilot Management"])
+    def revoke_shop_api_key_endpoint(
+        slug: str,
+        key_id: int,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Revoke a scoped shop API key immediately."""
+        assert_shop_access(principal, slug)
+        revoked = _get_db().revoke_shop_api_key(key_id=key_id, scenario_tag=slug)
+        if not revoked:
+            raise HTTPException(status_code=404, detail=f"API key {key_id} not found")
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="shop.api_key_revoke",
+            scenario_tag=slug,
+            target_type="shop_api_key",
+            target_id=str(key_id),
+        )
+        return revoked
+
+    @app.get("/api/v1/audit-logs", tags=["Pilot Management"])
+    def get_audit_logs(
+        scenario_tag: str | None = Query(default=None),
+        limit: int = Query(default=100, ge=1, le=500),
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Query immutable audit log entries scoped to authorized shops."""
+        if scenario_tag:
+            assert_shop_access(principal, scenario_tag)
+            allowed = None
+        else:
+            allowed = None if principal.is_admin else principal.allowed_shops
+        logs = _get_db().list_audit_logs(
+            scenario_tag=scenario_tag,
+            allowed_shops=allowed,
+            limit=limit,
+        )
+        return {"count": len(logs), "logs": logs}
+
+    def _create_oauth_state(scenario_tag: str, platform: str, actor: str) -> str:
+        now_dt = datetime.now(timezone.utc)
+        payload = {
+            "purpose": "marketplace_oauth",
+            "scenario_tag": scenario_tag,
+            "platform": platform,
+            "actor": actor,
+            "iat": int(now_dt.timestamp()),
+            "exp": int((now_dt + timedelta(minutes=15)).timestamp()),
+        }
+        return jwt.encode(payload, get_jwt_secret(), algorithm="HS256")
+
+    def _decode_oauth_state(state_token: str, expected_platform: str) -> dict[str, Any]:
+        try:
+            claims = jwt.decode(
+                state_token,
+                get_jwt_secret(),
+                algorithms=["HS256"],
+                options={"require": ["purpose", "scenario_tag", "platform", "exp"]},
+            )
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="OAuth state không hợp lệ hoặc đã hết hạn.",
+            ) from exc
+        if (
+            claims.get("purpose") != "marketplace_oauth"
+            or str(claims.get("platform", "")).lower() != expected_platform
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="OAuth state không khớp nền tảng.",
+            )
+        return claims
+
+    @app.get("/api/v1/shops/{slug}/connectors", tags=["Integrations"])
+    def list_shop_connectors(
+        slug: str,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """List active two-way Shopee / TikTok Shop OAuth connections for a shop."""
+        assert_shop_access(principal, slug)
+        items = _get_db().list_marketplace_connections(scenario_tag=slug, include_tokens=False)
+        by_plat = {c["platform"]: c for c in items}
+        return {
+            "scenario_tag": slug,
+            "supported_platforms": list(SUPPORTED_PLATFORMS),
+            "connections": items,
+            "platforms": {p: by_plat.get(p) for p in SUPPORTED_PLATFORMS},
+        }
+
+    @app.post("/api/v1/shops/{slug}/connectors/{platform}/authorize", tags=["Integrations"])
+    def authorize_shop_connector(
+        slug: str,
+        platform: str,
+        payload: AuthorizeConnectorRequest,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Generate a signed OAuth 2.0 authorization URL for Shopee or TikTok Shop."""
+        assert_shop_access(principal, slug)
+        clean_plat = platform.strip().lower()
+        try:
+            conn_cls = get_connector_class(clean_plat)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        state = _create_oauth_state(slug, clean_plat, principal.email)
+        try:
+            auth_url = conn_cls().build_auth_url(redirect_url=payload.redirect_url, state=state)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "scenario_tag": slug,
+            "platform": clean_plat,
+            "auth_url": auth_url,
+            "state": state,
+        }
+
+    @app.get("/api/v1/integrations/oauth/{platform}/callback", tags=["Integrations"])
+    def marketplace_oauth_callback(
+        platform: str,
+        request: Request,
+        code: str = Query(min_length=1),
+        state: str = Query(min_length=8),
+        shop_id: str | None = Query(default=None),
+        shop_cipher: str | None = Query(default=None),
+    ) -> dict[str, Any]:
+        """Handle Shopee / TikTok OAuth callback, exchange code, and store encrypted tokens."""
+        clean_plat = platform.strip().lower()
+        if clean_plat not in SUPPORTED_PLATFORMS:
+            raise HTTPException(status_code=400, detail=f"Unsupported platform '{platform}'.")
+        claims = _decode_oauth_state(state, clean_plat)
+        slug = str(claims["scenario_tag"])
+
+        conn_cls = get_connector_class(clean_plat)
+        connector = conn_cls()
+        try:
+            if clean_plat == "shopee":
+                if not shop_id:
+                    raise HTTPException(status_code=400, detail="Thiếu shop_id từ Shopee callback.")
+                tok_data = connector.exchange_code_for_token(code=code, shop_id=shop_id)
+            else:
+                tok_data = connector.exchange_code_for_token(
+                    code=code, shop_cipher=(shop_cipher or "")
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"OAuth token exchange failed: {exc}")
+
+        expires_in = int(tok_data.get("expires_in") or 14400)
+        now_dt = datetime.now(timezone.utc)
+        exp_iso = (now_dt + timedelta(seconds=max(60, expires_in))).isoformat()
+        ref_exp_in = tok_data.get("refresh_expires_in")
+        ref_exp_iso = (
+            (now_dt + timedelta(seconds=max(60, int(ref_exp_in)))).isoformat()
+            if ref_exp_in
+            else None
+        )
+
+        db = _get_db()
+        if not db.get_pilot_shop(slug):
+            db.create_pilot_shop(slug=slug, name=slug)
+        saved = db.upsert_marketplace_connection(
+            scenario_tag=slug,
+            platform=clean_plat,
+            external_shop_id=str(tok_data.get("external_shop_id") or shop_id or shop_cipher or ""),
+            access_token=str(tok_data.get("access_token") or ""),
+            refresh_token=str(tok_data.get("refresh_token") or ""),
+            token_expires_at=exp_iso,
+            refresh_expires_at=ref_exp_iso,
+            shop_name=str(tok_data.get("shop_name") or ""),
+        )
+        _record_audit(
+            request,
+            actor=str(claims.get("actor") or "oauth_callback"),
+            actor_role="owner",
+            action="connector.oauth_connected",
+            scenario_tag=slug,
+            target_type="marketplace_connection",
+            target_id=f"{slug}:{clean_plat}",
+            details={"external_shop_id": saved["external_shop_id"]},
+        )
+        return {"status": "connected", "connection": saved}
+
+    @app.post("/api/v1/shops/{slug}/connectors/{platform}/manual", tags=["Integrations"])
+    def save_manual_shop_connector(
+        slug: str,
+        platform: str,
+        payload: ManualConnectorRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Connect or update Shopee / TikTok credentials manually for a shop."""
+        assert_shop_access(principal, slug)
+        clean_plat = platform.strip().lower()
+        if clean_plat not in SUPPORTED_PLATFORMS:
+            raise HTTPException(status_code=400, detail=f"Unsupported platform '{platform}'.")
+        db = _get_db()
+        if not db.get_pilot_shop(slug):
+            db.create_pilot_shop(slug=slug, name=slug)
+        exp_iso = (
+            datetime.now(timezone.utc) + timedelta(seconds=payload.expires_in_seconds)
+        ).isoformat()
+        saved = db.upsert_marketplace_connection(
+            scenario_tag=slug,
+            platform=clean_plat,
+            external_shop_id=payload.external_shop_id,
+            access_token=payload.access_token,
+            refresh_token=payload.refresh_token,
+            token_expires_at=exp_iso,
+            shop_name=payload.shop_name,
+            auto_sync_enabled=payload.auto_sync_enabled,
+            sync_interval_minutes=payload.sync_interval_minutes,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="connector.manual_connected",
+            scenario_tag=slug,
+            target_type="marketplace_connection",
+            target_id=f"{slug}:{clean_plat}",
+            details={"external_shop_id": saved["external_shop_id"]},
+        )
+        return {"status": "connected", "connection": saved}
+
+    @app.delete("/api/v1/shops/{slug}/connectors/{platform}", tags=["Integrations"])
+    def disconnect_shop_connector(
+        slug: str,
+        platform: str,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Disconnect Shopee / TikTok Shop integration and wipe stored tokens."""
+        assert_shop_access(principal, slug)
+        clean_plat = platform.strip().lower()
+        deleted = _get_db().delete_marketplace_connection(slug, clean_plat)
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Không tìm thấy kết nối '{clean_plat}' cho gian hàng '{slug}'.",
+            )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="connector.disconnected",
+            scenario_tag=slug,
+            target_type="marketplace_connection",
+            target_id=f"{slug}:{clean_plat}",
+        )
+        return {"status": "disconnected", "scenario_tag": slug, "platform": clean_plat}
+
+    @app.post("/api/v1/shops/{slug}/connectors/{platform}/sync", tags=["Integrations"])
+    def sync_shop_connector_now(
+        slug: str,
+        platform: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        payload: SyncConnectorRequest | None = None,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> JSONResponse:
+        """Trigger an immediate background review sync from Shopee or TikTok Shop."""
+        assert_shop_access(principal, slug)
+        rate_limiter.check(f"mp_sync:{slug}:{principal.email}", max_requests=10, window_seconds=60)
+        clean_plat = platform.strip().lower()
+        if clean_plat not in SUPPORTED_PLATFORMS:
+            raise HTTPException(status_code=400, detail=f"Unsupported platform '{platform}'.")
+        req = payload or SyncConnectorRequest()
+        _validate_analyzer_method(req.analyzer_method)
+
+        db = _get_db()
+        if not db.get_marketplace_connection(slug, clean_plat, include_tokens=False):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Gian hàng '{slug}' chưa kết nối '{clean_plat}'.",
+            )
+        job_id = db.log_job_start(
+            job_type="marketplace_sync",
+            scenario_tag=slug,
+            details={"scenario_tag": slug, "platform": clean_plat, "limit": req.limit},
+        )
+        backend = enqueue_background_job(
+            task_sync_marketplace_reviews,
+            background_tasks,
+            priority="critical",
+            job_id=job_id,
+            scenario_tag=slug,
+            platform=clean_plat,
+            analyzer_method=req.analyzer_method,
+            limit=req.limit,
+            db_path=resolved_db_path,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="connector.manual_sync",
+            scenario_tag=slug,
+            target_type="marketplace_connection",
+            target_id=f"{slug}:{clean_plat}",
+            details={"job_id": job_id},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "job_id": job_id,
+                "scenario_tag": slug,
+                "platform": clean_plat,
+                "queue_backend": backend,
+                "status": "running",
+            },
         )
 
     @app.post("/api/v1/integrations/webhook/{shop_slug}", tags=["Integrations"])
@@ -613,21 +1833,66 @@ def create_app(db_path: str | None = None) -> FastAPI:
         request: Request,
         background_tasks: BackgroundTasks,
         x_signature: str | None = Header(default=None, alias="X-EcomReview-Signature"),
+        x_timestamp: str | None = Header(default=None, alias="X-EcomReview-Timestamp"),
+        x_nonce: str | None = Header(default=None, alias="X-EcomReview-Nonce"),
     ) -> Any:
         """HMAC-authenticated webhook endpoint for n8n/Sapo/Haravan/Marketplace review pushes."""
+        rate_limiter.check(
+            f"webhook:{shop_slug}:{client_ip_from_request(request)}",
+            max_requests=60,
+            window_seconds=60,
+        )
         db = _get_db()
         shop = db.get_pilot_shop(shop_slug, include_secret=True)
         if not shop or not shop.get("webhook_secret"):
             raise HTTPException(status_code=404, detail=f"Webhook not enabled for '{shop_slug}'.")
         raw_body = await request.body()
-        expected_sig = hmac.new(
-            shop["webhook_secret"].encode("utf-8"), raw_body, hashlib.sha256
-        ).hexdigest()
-        if not x_signature or not hmac.compare_digest(x_signature.strip(), expected_sig):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid X-EcomReview-Signature.",
-            )
+
+        if x_timestamp is not None and x_timestamp.strip():
+            try:
+                ts_val = int(x_timestamp.strip())
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="X-EcomReview-Timestamp không hợp lệ.",
+                ) from exc
+            if abs(int(time.time()) - ts_val) > 300:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Webhook timestamp đã hết hạn (vượt quá cửa sổ 5 phút).",
+                )
+            signed_payload = f"{ts_val}.".encode("utf-8") + raw_body
+            expected_sig = hmac.new(
+                shop["webhook_secret"].encode("utf-8"), signed_payload, hashlib.sha256
+            ).hexdigest()
+            if not x_signature or not hmac.compare_digest(x_signature.strip(), expected_sig):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid X-EcomReview-Signature.",
+                )
+            nonce_part = (x_nonce or expected_sig).strip()
+            replay_key = f"{shop_slug}:{ts_val}:{nonce_part}"
+            if not webhook_replay_guard.check_and_mark(replay_key, ttl_seconds=600):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Yêu cầu webhook bị trùng lặp (replay detected).",
+                )
+        else:
+            if is_production_env():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=(
+                        "Thiếu header X-EcomReview-Timestamp bắt buộc trong môi trường production."
+                    ),
+                )
+            expected_sig = hmac.new(
+                shop["webhook_secret"].encode("utf-8"), raw_body, hashlib.sha256
+            ).hexdigest()
+            if not x_signature or not hmac.compare_digest(x_signature.strip(), expected_sig):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid X-EcomReview-Signature.",
+                )
         try:
             body_json = json.loads(raw_body.decode("utf-8"))
         except Exception as exc:
@@ -656,6 +1921,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         dispatch_backend = enqueue_background_job(
             task_ingest_review_batch,
             background_tasks,
+            priority="critical",
             job_id=job_id,
             scenario_tag=shop_slug,
             reviews=raw_reviews[:MAX_ASYNC_UPLOAD_ROWS],
@@ -673,16 +1939,60 @@ def create_app(db_path: str | None = None) -> FastAPI:
             },
         )
 
-    # 1. System Health
+    # 1. System Health & Prometheus Metrics
+    @app.get("/metrics", tags=["System"])
+    def prometheus_metrics(
+        request: Request,
+        x_metrics_token: str | None = Header(default=None, alias="X-Metrics-Token"),
+    ) -> Response:
+        """Expose Prometheus text exposition metrics protected by token or internal network."""
+        expected_tok = os.getenv("ECOMREVIEW_METRICS_TOKEN", "").strip()
+        if expected_tok:
+            auth_h = request.headers.get("authorization", "").strip()
+            bearer = auth_h[7:].strip() if auth_h.lower().startswith("bearer ") else ""
+            cand = (x_metrics_token or bearer or "").strip()
+            if not cand or not secrets.compare_digest(cand, expected_tok):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Invalid metrics token.",
+                )
+        elif is_production_env():
+            ip_str = client_ip_from_request(request).split("%", 1)[0]
+            allowed_internal = ip_str in {"127.0.0.1", "::1", "testclient"}
+            if not allowed_internal:
+                try:
+                    addr = ipaddress.ip_address(ip_str)
+                    allowed_internal = bool(addr.is_loopback or addr.is_private)
+                except ValueError:
+                    allowed_internal = False
+            if not allowed_internal:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Metrics endpoint restricted to internal network.",
+                )
+
+        redis_conn = _get_redis_client()
+        body = metrics_registry.render_prometheus(redis_client=redis_conn)
+        return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
     @app.get("/api/v1/health", tags=["System"])
     def health_check() -> dict[str, Any]:
-        """1. Check API, database connection, and security configuration status."""
+        """1. Check API, database connection, Redis/RQ queues, and security configuration."""
         db = _get_db()
         with db.get_connection(read_only=True) as conn:
             rev_count = conn.execute("SELECT COUNT(*) AS cnt FROM reviews").fetchone()["cnt"]
         demo_mode = os.getenv("DEMO_CACHE_MODE", "true").lower() == "true"
         auth_enabled = bool(os.getenv("ECOMREVIEW_API_KEY", "").strip()) or is_production_env()
-        queue_backend = "redis_rq" if os.getenv("REDIS_URL", "").strip() else "in_memory"
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        redis_conn = _get_redis_client()
+        rq_depths: dict[str, int] = {}
+        if redis_conn is not None:
+            for qname in PRIORITY_QUEUES:
+                try:
+                    rq_depths[qname] = int(redis_conn.llen(f"rq:queue:{qname}") or 0)
+                except Exception:
+                    rq_depths[qname] = -1
+        queue_backend = "redis_rq" if redis_url else "in_memory"
         return {
             "status": "healthy",
             "env": os.getenv("ECOMREVIEW_ENV", "development").strip().lower(),
@@ -694,6 +2004,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "auth_enabled": auth_enabled,
             "endpoints_count": 15,
             "extended_endpoints_count": 18,
+            "components": {
+                "database": {"status": "up", "backend": db.backend},
+                "redis": {
+                    "status": "up"
+                    if redis_conn is not None
+                    else ("disabled" if not redis_url else "down")
+                },
+                "rq_queues": rq_depths,
+            },
         }
 
     # 2. Ingestion
@@ -737,6 +2056,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "analyzer_method": ingest_res["analyzer_method"],
                 "status": "completed",
             }
+        except QuotaExceededError as qe:
+            db.log_job_complete(
+                job_id,
+                status="failed",
+                details={"scenario_tag": payload.scenario_tag, "error": qe.detail},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=qe.detail,
+            ) from qe
         except Exception as e:
             db.log_job_complete(
                 job_id,
@@ -788,6 +2117,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
         except ValueError as ve:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
+        if async_mode:
+            tenant_job_quota.check(scenario_tag)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="reviews_upload_file",
@@ -807,6 +2138,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             queue_backend = enqueue_background_job(
                 task_ingest_review_batch,
                 background_tasks,
+                priority="low" if len(valid_reviews) > 500 else "default",
                 job_id=job_id,
                 scenario_tag=scenario_tag,
                 reviews=valid_reviews,
@@ -852,6 +2184,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 "analyzer_method": ingest_res["analyzer_method"],
                 "status": "completed",
             }
+        except QuotaExceededError as qe:
+            db.log_job_complete(
+                job_id,
+                status="failed",
+                details={"scenario_tag": scenario_tag, "error": qe.detail},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=qe.detail,
+            ) from qe
         except Exception as e:
             db.log_job_complete(
                 job_id,
@@ -877,6 +2219,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
         assert_shop_access(principal, payload.scenario_tag)
         rate_limiter.check(f"analyze:{principal.email}", max_requests=20, window_seconds=60)
         _validate_analyzer_method(payload.analyzer_method)
+        if payload.async_mode:
+            tenant_job_quota.check(payload.scenario_tag)
         db = _get_db()
         job_id = db.log_job_start(
             job_type="analyze_run",
@@ -893,6 +2237,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             queue_backend = enqueue_background_job(
                 task_run_analysis,
                 background_tasks,
+                priority="default",
                 job_id=job_id,
                 scenario_tag=payload.scenario_tag,
                 analyzer_method=payload.analyzer_method,
@@ -939,7 +2284,19 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "status": "completed",
         }
 
-    # 4. Jobs Audit
+    # 4. Jobs Audit & Dead-Letter Queue
+    @app.get(
+        "/api/v1/admin/jobs/dlq",
+        tags=["System"],
+    )
+    def get_admin_jobs_dlq(
+        limit: int = Query(default=50, ge=1, le=200),
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """Return recent failed background jobs and Redis Dead-Letter Queue entries."""
+        items = list_dlq_entries(db=_get_db(), limit=limit)
+        return {"count": len(items), "entries": items}
+
     @app.get(
         "/api/v1/jobs/{job_id}",
         tags=["System"],
@@ -1028,6 +2385,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "items": hidden_items,
         }
 
+        sku_breakdown = get_sku_variation_stats(scenario_tag=scenario_tag, min_n=1, limit=8, db=db)
+
         return {
             "scenario_tag": scenario_tag,
             "total_reviews": total_revs,
@@ -1044,7 +2403,177 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "platform_gaps": platform_gaps,
             "platform_comparison": platform_comparison,
             "hidden_complaints": hidden_summary,
+            "sku_breakdown": sku_breakdown,
         }
+
+    @app.get(
+        "/api/v1/stats/sku-breakdown",
+        tags=["Analytics"],
+    )
+    def get_sku_breakdown(
+        scenario_tag: str = Query(default="real_shop"),
+        platform: str | None = Query(default=None),
+        min_n: int = Query(default=2, ge=1, le=1000),
+        limit: int = Query(default=20, ge=1, le=100),
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Return deterministic complaint statistics & Wilson 95% CI grouped by SKU/variation."""
+        assert_shop_access(principal, scenario_tag)
+        items = get_sku_variation_stats(
+            scenario_tag=scenario_tag,
+            platform=platform,
+            min_n=min_n,
+            limit=limit,
+            db=_get_db(),
+        )
+        return {"scenario_tag": scenario_tag, "count": len(items), "items": items}
+
+    @app.get(
+        "/api/v1/executive/summary",
+        tags=["Agency Executive"],
+    )
+    def get_executive_summary(
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Return cross-shop agency command summary strictly scoped to allowed_shops."""
+        db = _get_db()
+        allowed = None if principal.is_admin else principal.allowed_shops
+        shops = db.list_pilot_shops(allowed_slugs=allowed)
+        shop_meta = {s["slug"]: {"name": s["name"], "industry": s["industry"]} for s in shops}
+        target_slugs = [s["slug"] for s in shops]
+
+        if not target_slugs and principal.is_admin:
+            with db.get_connection(read_only=True) as conn:
+                rows = conn.execute(
+                    "SELECT DISTINCT scenario_tag FROM reviews ORDER BY scenario_tag"
+                ).fetchall()
+            target_slugs = [str(r["scenario_tag"]) for r in rows]
+
+        for slug in target_slugs:
+            assert_shop_access(principal, slug)
+
+        return get_executive_multi_shop_summary(
+            shop_slugs=target_slugs,
+            shop_meta=shop_meta,
+            db=db,
+        )
+
+    @app.get("/api/v1/billing/usage", tags=["Billing & Quota"])
+    def get_billing_usage(
+        scenario_tag: str | None = Query(default=None),
+        month_key: str | None = Query(default=None),
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Return SaaS subscription limits and monthly review/reply usage metering."""
+        db = _get_db()
+        eff_month = (month_key or current_month_key()).strip()[:7]
+        if scenario_tag:
+            assert_shop_access(principal, scenario_tag)
+            target_slugs = [scenario_tag]
+        elif principal.is_admin:
+            all_shops = db.list_pilot_shops()
+            target_slugs = [s["slug"] for s in all_shops] or ["real_shop"]
+        else:
+            target_slugs = list(principal.allowed_shops)
+
+        sub = resolve_subscription(db, [*target_slugs, principal.email])
+        usage = db.get_monthly_usage(target_slugs, eff_month)
+        shops_used = len(
+            db.list_pilot_shops(
+                allowed_slugs=None if principal.is_admin else principal.allowed_shops
+            )
+        )
+        owner_shops = set(principal.allowed_shops)
+        all_users = db.list_users()
+        if principal.is_admin:
+            users_used = len(all_users)
+        else:
+            users_used = len(
+                [
+                    u
+                    for u in all_users
+                    if str(u["email"]).lower() == principal.email.lower()
+                    or (
+                        str(u["role"]).lower() == "cskh"
+                        and set(u.get("allowed_shops") or []).issubset(owner_shops)
+                    )
+                ]
+            )
+
+        llm_used = int(usage.get("llm_reviews_used") or 0)
+        llm_limit = int(sub.get("monthly_llm_review_limit") or 2000)
+        llm_pct = round((llm_used / llm_limit) * 100.0, 1) if llm_limit > 0 else 100.0
+        return {
+            "month_key": eff_month,
+            "scoped_shops": target_slugs,
+            "subscription": sub,
+            "usage": {
+                **usage,
+                "llm_usage_pct": llm_pct,
+                "shops_used": shops_used,
+                "users_used": users_used,
+                "is_near_limit": llm_pct >= 80.0 and llm_used < llm_limit,
+                "is_over_limit": llm_used >= llm_limit,
+            },
+            "plans": list(PLAN_CATALOG.values()),
+        }
+
+    @app.patch("/api/v1/admin/subscriptions/{tenant_key}", tags=["Billing & Quota"])
+    def admin_update_subscription(
+        tenant_key: str,
+        payload: AdminUpdateSubscriptionRequest,
+        request: Request,
+        principal: AuthPrincipal = Depends(require_roles("admin")),
+    ) -> dict[str, Any]:
+        """Admin manual plan/quota upgrade endpoint for B2B contracts."""
+        plan_code = payload.plan_code.strip().lower()
+        if plan_code not in PLAN_CATALOG:
+            raise HTTPException(
+                status_code=400, detail=f"plan_code must be one of {sorted(PLAN_CATALOG.keys())}"
+            )
+        sub_status = payload.status.strip().upper()
+        if sub_status not in {"TRIAL", "ACTIVE", "SUSPENDED"}:
+            raise HTTPException(
+                status_code=400, detail="status must be TRIAL, ACTIVE, or SUSPENDED"
+            )
+        policy = payload.overage_policy.strip().lower()
+        if policy not in {"fallback_b1", "block"}:
+            raise HTTPException(
+                status_code=400, detail="overage_policy must be 'fallback_b1' or 'block'"
+            )
+
+        plan_def = PLAN_CATALOG[plan_code]
+        db = _get_db()
+        updated = db.upsert_tenant_subscription(
+            tenant_key=tenant_key,
+            plan_code=plan_code,
+            status=sub_status,
+            monthly_llm_review_limit=(
+                payload.monthly_llm_review_limit
+                if payload.monthly_llm_review_limit is not None
+                else plan_def["monthly_llm_review_limit"]
+            ),
+            max_shops=(
+                payload.max_shops if payload.max_shops is not None else plan_def["max_shops"]
+            ),
+            max_users=(
+                payload.max_users if payload.max_users is not None else plan_def["max_users"]
+            ),
+            overage_policy=policy,
+            notes=payload.notes,
+            updated_by=principal.email,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="billing.subscription_update",
+            scenario_tag=tenant_key,
+            target_type="tenant_subscription",
+            target_id=tenant_key,
+            details={"plan_code": plan_code, "status": sub_status},
+        )
+        return updated
 
     # 6. Insights Listing
     @app.get(
@@ -1258,6 +2787,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         platform: str | None = Query(default=None),
         aspect: str | None = Query(default=None),
         polarity: str | None = Query(default=None),
+        anomaly_only: bool = Query(default=False),
         review_ids: str | None = Query(
             default=None, description="Comma-separated review IDs for evidence drill-down"
         ),
@@ -1280,6 +2810,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     if platform:
                         where_sql += " AND r.platform = ?"
                         p_where.append(platform)
+                    if anomaly_only:
+                        where_sql += " AND COALESCE(r.anomaly_flags, '[]') NOT IN ('', '[]')"
                     if aspect:
                         if polarity:
                             where_sql += (
@@ -1322,6 +2854,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if platform:
                     where_sql += " AND r.platform = ?"
                     p_where.append(platform)
+                if anomaly_only:
+                    where_sql += " AND COALESCE(r.anomaly_flags, '[]') NOT IN ('', '[]')"
                 cnt_row = conn.execute(
                     f"SELECT COUNT(DISTINCT r.review_id) AS cnt "
                     f"FROM reviews r "
@@ -1348,6 +2882,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 if polarity:
                     where_sql += " AND overall_sentiment = ?"
                     p_where.append(polarity)
+                if anomaly_only:
+                    where_sql += " AND COALESCE(anomaly_flags, '[]') NOT IN ('', '[]')"
                 cnt_row = conn.execute(
                     f"SELECT COUNT(*) AS cnt FROM reviews{where_sql}",
                     tuple(p_where),
@@ -1381,7 +2917,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     )
                 rep_rows = conn.execute(
                     f"SELECT id, review_id, reply_text, mode_used, guardrail_passed, "
-                    f"violations, status, created_by, created_at, sent_at "
+                    f"violations, status, created_by, created_at, sent_at, "
+                    f"external_sync_status, external_sync_error, external_synced_at "
                     f"FROM review_replies "
                     f"WHERE scenario_tag = ? AND review_id IN ({ph}) ORDER BY id ASC",
                     (scenario_tag, *matched_rids),
@@ -1405,6 +2942,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
                         "created_by": str(rep["created_by"] or ""),
                         "created_at": str(rep["created_at"] or ""),
                         "sent_at": str(rep["sent_at"]) if rep["sent_at"] else None,
+                        "external_sync_status": str(rep["external_sync_status"] or "LOCAL_ONLY"),
+                        "external_sync_error": rep["external_sync_error"],
+                        "external_synced_at": (
+                            str(rep["external_synced_at"]) if rep["external_synced_at"] else None
+                        ),
                     }
 
             reviews_out = []
@@ -1413,10 +2955,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 rep_st = reply_status_map.get(rid, "NONE")
                 rating_val = int(r["rating"] or 5)
                 created_val = str(r["created_at"]) if r["created_at"] else None
+                raw_af = r["anomaly_flags"] if "anomaly_flags" in r.keys() else "[]"
+                try:
+                    af_list = (
+                        json.loads(raw_af or "[]") if isinstance(raw_af, str) else list(raw_af)
+                    )
+                except Exception:
+                    af_list = []
                 reviews_out.append(
                     {
                         "review_id": rid,
                         "platform": str(r["platform"]),
+                        "product": str(r["product"]),
+                        "variation": str(r["variation"] or "") if "variation" in r.keys() else "",
+                        "anomaly_flags": af_list,
                         "rating": rating_val,
                         "text_raw": str(r["text_raw"]),
                         "created_at": created_val,
@@ -1535,6 +3087,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             status="DRAFT",
             created_by=reviewer,
         )
+        record_reply_usage(db, scenario_tag, count=1)
         res["reply_id"] = reply_id
         res["status"] = "DRAFT"
         return res
@@ -1566,6 +3119,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def update_reply_status(
         reply_id: int,
         payload: ReviewReplyStatusRequest,
+        request: Request,
+        background_tasks: BackgroundTasks,
         principal: AuthPrincipal = Depends(get_current_principal),
         reviewer: str = Depends(get_current_reviewer),
     ) -> dict[str, Any]:
@@ -1639,7 +3194,323 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
         if not updated:
             raise HTTPException(status_code=404, detail=f"Reply {reply_id} not found")
+
+        if target_status == "SENT" and payload.push_to_marketplace:
+            with db.get_connection(read_only=True) as conn:
+                rev_row = conn.execute(
+                    "SELECT platform FROM reviews WHERE review_id = ? AND scenario_tag = ?",
+                    (existing["review_id"], existing["scenario_tag"]),
+                ).fetchone()
+            rev_plat = str(rev_row["platform"]).lower() if rev_row else ""
+            has_conn = bool(
+                rev_plat
+                and db.get_marketplace_connection(
+                    str(existing["scenario_tag"]), rev_plat, include_tokens=False
+                )
+            )
+            if has_conn and updated.get("external_sync_status") != "PUSHED":
+                queued_state = db.update_review_reply_external_sync(reply_id, "QUEUED", None)
+                if queued_state:
+                    updated["external_sync_status"] = queued_state["external_sync_status"]
+                enqueue_background_job(
+                    task_push_marketplace_reply,
+                    background_tasks,
+                    priority="critical",
+                    reply_id=reply_id,
+                    scenario_tag=str(existing["scenario_tag"]),
+                    db_path=resolved_db_path,
+                )
+                refreshed = db.list_review_replies(
+                    str(existing["review_id"]), str(existing["scenario_tag"])
+                )
+                matched_rep = next((x for x in refreshed if int(x["id"]) == reply_id), None)
+                if matched_rep:
+                    updated = matched_rep
+
+        if target_status in {"APPROVED", "SENT"}:
+            _record_audit(
+                request,
+                actor=principal.email,
+                actor_role=principal.role,
+                action=f"reply.{target_status.lower()}",
+                scenario_tag=str(existing["scenario_tag"]),
+                target_type="review_reply",
+                target_id=str(reply_id),
+                details={
+                    "review_id": str(existing["review_id"]),
+                    "external_sync_status": updated.get("external_sync_status", "LOCAL_ONLY"),
+                },
+            )
         return updated
+
+    @app.post(
+        "/api/v1/reviews/replies/{reply_id}/retry-push",
+        tags=["Customer Care"],
+    )
+    def retry_push_reply_to_marketplace(
+        reply_id: int,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Retry pushing an already approved/sent G1-G6 reply to Shopee or TikTok Shop."""
+        db = _get_db()
+        with db.get_connection(read_only=True) as conn:
+            row = conn.execute(
+                """
+                SELECT rr.id, rr.review_id, rr.scenario_tag, rr.guardrail_passed,
+                       rr.status, rr.external_sync_status, r.platform
+                FROM review_replies rr
+                JOIN reviews r
+                  ON r.review_id = rr.review_id AND r.scenario_tag = rr.scenario_tag
+                WHERE rr.id = ?
+                """,
+                (reply_id,),
+            ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Reply {reply_id} not found")
+        slug = str(row["scenario_tag"])
+        assert_shop_access(principal, slug)
+        if not bool(row["guardrail_passed"]):
+            raise HTTPException(
+                status_code=400,
+                detail="Phản hồi chưa đạt quy tắc an toàn G1-G6 nên không thể đẩy lên sàn.",
+            )
+        plat = str(row["platform"] or "").lower()
+        if not db.get_marketplace_connection(slug, plat, include_tokens=False):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Gian hàng '{slug}' chưa kết nối tài khoản '{plat}'.",
+            )
+        if str(row["external_sync_status"] or "") == "PUSHED":
+            return {"id": reply_id, "scenario_tag": slug, "external_sync_status": "PUSHED"}
+
+        db.update_review_reply_external_sync(reply_id, "QUEUED", None)
+        enqueue_background_job(
+            task_push_marketplace_reply,
+            background_tasks,
+            priority="critical",
+            reply_id=reply_id,
+            scenario_tag=slug,
+            db_path=resolved_db_path,
+        )
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="reply.retry_push",
+            scenario_tag=slug,
+            target_type="review_reply",
+            target_id=str(reply_id),
+        )
+        replies = db.list_review_replies(str(row["review_id"]), slug)
+        matched = next((x for x in replies if int(x["id"]) == reply_id), None)
+        return matched or {"id": reply_id, "scenario_tag": slug, "external_sync_status": "QUEUED"}
+
+    @app.post("/api/v1/reviews/bulk-reply-draft", tags=["Customer Care"])
+    def bulk_create_reply_drafts(
+        payload: BulkReplyDraftRequest,
+        principal: AuthPrincipal = Depends(get_current_principal),
+        reviewer: str = Depends(get_current_reviewer),
+    ) -> dict[str, Any]:
+        """Generate and persist G1-G6 CSKH reply drafts for up to 50 reviews in one call."""
+        assert_shop_access(principal, payload.scenario_tag)
+        norm_mode = payload.mode.strip().lower()
+        if norm_mode not in {"template", "llm"}:
+            raise HTTPException(status_code=400, detail="mode must be 'template' or 'llm'")
+        db = _get_db()
+        results: list[dict[str, Any]] = []
+        failed_ids: list[str] = []
+        for rid in dict.fromkeys(r.strip() for r in payload.review_ids if r.strip()):
+            res = generate_customer_reply(
+                review_id=rid,
+                scenario_tag=payload.scenario_tag,
+                mode=norm_mode,
+                db=db,
+            )
+            if res.get("status") == "error":
+                failed_ids.append(rid)
+                continue
+            gr = res.get("guardrail_report") or {}
+            reply_id = db.insert_review_reply(
+                review_id=rid,
+                scenario_tag=payload.scenario_tag,
+                reply_text=str(res["reply_text"]),
+                mode_used=str(res.get("mode_used", norm_mode)),
+                guardrail_passed=bool(gr.get("passed", True)),
+                violations=list(gr.get("violations") or []),
+                status="DRAFT",
+                created_by=reviewer,
+            )
+            res["reply_id"] = reply_id
+            res["status"] = "DRAFT"
+            results.append(res)
+        return {
+            "scenario_tag": payload.scenario_tag,
+            "created_count": len(results),
+            "failed_ids": failed_ids,
+            "drafts": results,
+        }
+
+    @app.post("/api/v1/reviews/replies/bulk-status", tags=["Customer Care"])
+    def bulk_update_reply_status(
+        payload: BulkReplyStatusRequest,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> dict[str, Any]:
+        """Approve or send up to 50 G1-G6 compliant CSKH replies in one batch."""
+        assert_shop_access(principal, payload.scenario_tag)
+        target_status = payload.status.strip().upper()
+        if target_status not in {"APPROVED", "SENT"}:
+            raise HTTPException(status_code=400, detail="status must be 'APPROVED' or 'SENT'")
+
+        db = _get_db()
+        updated_items: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        unique_ids = list(dict.fromkeys(payload.reply_ids))
+
+        for rid_num in unique_ids:
+            with db.get_connection(read_only=True) as conn:
+                existing = conn.execute(
+                    "SELECT rr.id, rr.review_id, rr.scenario_tag, rr.reply_text, "
+                    "rr.guardrail_passed, rr.external_sync_status, r.platform "
+                    "FROM review_replies rr "
+                    "JOIN reviews r "
+                    "ON r.review_id = rr.review_id AND r.scenario_tag = rr.scenario_tag "
+                    "WHERE rr.id = ?",
+                    (rid_num,),
+                ).fetchone()
+                if not existing:
+                    rejected.append({"reply_id": rid_num, "reason": "not_found"})
+                    continue
+                if str(existing["scenario_tag"]) != payload.scenario_tag:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Reply {rid_num} does not belong to shop '{payload.scenario_tag}'.",
+                    )
+                neg_rows = conn.execute(
+                    "SELECT DISTINCT aspect FROM opinions "
+                    "WHERE review_id = ? AND scenario_tag = ? AND polarity = 'negative'",
+                    (existing["review_id"], existing["scenario_tag"]),
+                ).fetchall()
+                neg_aspects = [str(r["aspect"]) for r in neg_rows]
+
+            recheck = check_reply_guardrails(
+                reply_text=str(existing["reply_text"] or ""),
+                negative_aspects=neg_aspects,
+            )
+            if not bool(existing["guardrail_passed"]) or not recheck.passed:
+                rejected.append(
+                    {
+                        "reply_id": rid_num,
+                        "reason": "; ".join(recheck.violations) or "G1-G6 failed",
+                    }
+                )
+                continue
+
+            upd = db.update_review_reply_status(reply_id=rid_num, status=target_status)
+            if not upd:
+                rejected.append({"reply_id": rid_num, "reason": "update_failed"})
+                continue
+
+            if target_status == "SENT" and payload.push_to_marketplace:
+                rev_plat = str(existing["platform"] or "").lower()
+                has_conn = bool(
+                    rev_plat
+                    and db.get_marketplace_connection(
+                        payload.scenario_tag, rev_plat, include_tokens=False
+                    )
+                )
+                if has_conn and upd.get("external_sync_status") != "PUSHED":
+                    db.update_review_reply_external_sync(rid_num, "QUEUED", None)
+                    upd["external_sync_status"] = "QUEUED"
+                    enqueue_background_job(
+                        task_push_marketplace_reply,
+                        background_tasks,
+                        priority="critical",
+                        reply_id=rid_num,
+                        scenario_tag=payload.scenario_tag,
+                        db_path=resolved_db_path,
+                    )
+            updated_items.append(upd)
+
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action=f"reply.bulk_{target_status.lower()}",
+            scenario_tag=payload.scenario_tag,
+            target_type="review_reply",
+            details={"updated_count": len(updated_items), "rejected_count": len(rejected)},
+        )
+        return {
+            "scenario_tag": payload.scenario_tag,
+            "updated_count": len(updated_items),
+            "rejected_count": len(rejected),
+            "updated": updated_items,
+            "rejected": rejected,
+        }
+
+    @app.post("/api/v1/reviews/auto-reply-5star", tags=["Customer Care"])
+    def trigger_auto_reply_5star(
+        payload: AutoReply5StarRequest,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        principal: AuthPrincipal = Depends(require_roles("admin", "owner")),
+    ) -> dict[str, Any]:
+        """Auto-reply clean 5-star reviews passing G1-G6 and optionally push to marketplace."""
+        assert_shop_access(principal, payload.scenario_tag)
+        db = _get_db()
+        res = auto_reply_eligible_five_star_reviews(
+            db=db,
+            scenario_tag=payload.scenario_tag,
+            review_ids=payload.review_ids,
+            limit=payload.limit,
+            actor=principal.email,
+        )
+        queued_push = 0
+        if payload.push_to_marketplace and res.get("created_reply_ids"):
+            conns = db.list_marketplace_connections(
+                scenario_tag=payload.scenario_tag, include_tokens=False
+            )
+            connected_plats = {c["platform"] for c in conns}
+            if connected_plats:
+                for rep_id in res["created_reply_ids"]:
+                    with db.get_connection(read_only=True) as conn:
+                        rrow = conn.execute(
+                            "SELECT r.platform FROM review_replies rr "
+                            "JOIN reviews r "
+                            "ON r.review_id = rr.review_id AND r.scenario_tag = rr.scenario_tag "
+                            "WHERE rr.id = ?",
+                            (rep_id,),
+                        ).fetchone()
+                    if rrow and str(rrow["platform"]).lower() in connected_plats:
+                        db.update_review_reply_external_sync(rep_id, "QUEUED", None)
+                        enqueue_background_job(
+                            task_push_marketplace_reply,
+                            background_tasks,
+                            priority="critical",
+                            reply_id=rep_id,
+                            scenario_tag=payload.scenario_tag,
+                            db_path=resolved_db_path,
+                        )
+                        queued_push += 1
+
+        _record_audit(
+            request,
+            actor=principal.email,
+            actor_role=principal.role,
+            action="reply.auto_5star",
+            scenario_tag=payload.scenario_tag,
+            target_type="review_reply",
+            details={
+                "replied_count": res["replied_count"],
+                "skipped_count": res["skipped_count"],
+                "queued_push": queued_push,
+            },
+        )
+        return {**res, "queued_push_count": queued_push}
 
     # 14. Action Intervention Impact
     @app.get(
@@ -1679,6 +3550,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         tags=["Reports"],
     )
     def export_report(
+        request: Request,
         scenario_tag: str = Query(default="real_shop"),
         format: str = Query(default="xlsx", description="'xlsx' or 'html'"),
         principal: AuthPrincipal = Depends(get_current_principal),
@@ -1690,6 +3562,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
         safe_tag = re.sub(r"[^a-zA-Z0-9_\-]", "_", scenario_tag)[:64]
         if fmt in ("xlsx", "excel"):
             xlsx_bytes = build_excel_report(scenario_tag=scenario_tag, db=db)
+            _record_audit(
+                request,
+                actor=principal.email,
+                actor_role=principal.role,
+                action="report.export",
+                scenario_tag=scenario_tag,
+                target_type="report",
+                target_id=fmt,
+            )
             filename = f"EcomReview_Report_{safe_tag}.xlsx"
             return Response(
                 content=xlsx_bytes,
@@ -1698,6 +3579,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
             )
         if fmt in ("html", "htm"):
             html_text = build_html_report(scenario_tag=scenario_tag, db=db)
+            _record_audit(
+                request,
+                actor=principal.email,
+                actor_role=principal.role,
+                action="report.export",
+                scenario_tag=scenario_tag,
+                target_type="report",
+                target_id=fmt,
+            )
             return Response(
                 content=html_text,
                 media_type="text/html; charset=utf-8",

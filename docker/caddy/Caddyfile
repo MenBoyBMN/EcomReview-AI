@@ -1,0 +1,31 @@
+# Production Caddyfile for single-VPS deployment (Automatic Let's Encrypt HTTPS + Reverse Proxy)
+# Usage: Set ECOMREVIEW_DOMAIN=app.yourdomain.vn in .env or replace {$ECOMREVIEW_DOMAIN}
+
+{$ECOMREVIEW_DOMAIN:localhost} {
+    encode gzip zstd
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Block external access to internal Prometheus metrics endpoint
+    @metrics path /metrics*
+    respond @metrics 403
+
+    handle /api/* {
+        reverse_proxy api:8000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+# CreBy: MenBoyBMN

@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 from ecomreview.agent.insight_engine import ASPECT_VN_LABELS, verify_numbers_in_statement
+from ecomreview.agent.playbook_loader import resolve_playbook_path
 from ecomreview.llm_provider import get_default_llm_client, is_agent_llm_enabled
 from ecomreview.schemas import (
     MARKETING_ACTION_TYPES,
@@ -55,13 +56,20 @@ class ActionPlanner:
         prompt_path: str | Path = DEFAULT_PLANNER_PROMPT_PATH,
         llm_client: Any | None = None,
         use_llm: bool | None = None,
+        industry: str | None = None,
+        brand_voice: dict[str, Any] | None = None,
     ):
-        pb_path = Path(playbook_path)
-        self.playbook_path = pb_path if pb_path.is_absolute() else (_PROJECT_ROOT / pb_path)
+        default_rel = Path("knowledge/playbook_aomua.yaml")
+        if industry is not None and Path(playbook_path) == default_rel:
+            self.playbook_path = resolve_playbook_path(industry)
+        else:
+            pb_path = Path(playbook_path)
+            self.playbook_path = pb_path if pb_path.is_absolute() else (_PROJECT_ROOT / pb_path)
         pr_path = Path(prompt_path)
         self.prompt_path = pr_path if pr_path.is_absolute() else (_PROJECT_ROOT / pr_path)
         self._llm_client = llm_client
         self.use_llm = is_agent_llm_enabled() if use_llm is None else bool(use_llm)
+        self.brand_voice: dict[str, Any] = dict(brand_voice or {})
         self.last_used_llm: bool = False
         self.playbook_data: dict[str, Any] = {"playbook_rules": [], "guardrails": {}}
         if self.playbook_path.exists():
@@ -268,6 +276,16 @@ class ActionPlanner:
             f"Hãy tạo tối đa {max_actions} đề xuất hành động cụ thể, bám sát từng ngữ cảnh "
             f"và trả về JSON khớp schema ActionPlanBatch.",
         ]
+        if self.brand_voice:
+            bv_parts = []
+            if self.brand_voice.get("tone"):
+                bv_parts.append(f"Giọng điệu thương hiệu: {self.brand_voice['tone']}")
+            if self.brand_voice.get("cskh_notes"):
+                bv_parts.append(f"Lưu ý vận hành/CSKH: {self.brand_voice['cskh_notes']}")
+            if self.brand_voice.get("return_policy"):
+                bv_parts.append(f"Chính sách đổi trả: {self.brand_voice['return_policy']}")
+            if bv_parts:
+                prompt_parts.append("Hồ sơ thương hiệu (Brand Voice):\n" + "\n".join(bv_parts))
         if critic_feedback.strip():
             prompt_parts.append(f"Phản hồi từ HybridCritic cần khắc phục:\n{critic_feedback}")
 

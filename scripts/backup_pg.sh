@@ -20,7 +20,12 @@ echo "[backup_pg] Saved backup: ${OUT_FILE} ($(du -h "$OUT_FILE" | cut -f1))"
 
 if [ -n "${BACKUP_S3_URI:-}" ] && command -v aws >/dev/null 2>&1; then
   echo "[backup_pg] Uploading to ${BACKUP_S3_URI}..."
-  aws s3 cp "$OUT_FILE" "${BACKUP_S3_URI%/}/$(basename "$OUT_FILE")"
+  if [ -n "${BACKUP_S3_ENDPOINT_URL:-}" ]; then
+    # Cloudflare R2 or S3-compatible object storage
+    aws s3 cp --endpoint-url "$BACKUP_S3_ENDPOINT_URL" "$OUT_FILE" "${BACKUP_S3_URI%/}/$(basename "$OUT_FILE")"
+  else
+    aws s3 cp "$OUT_FILE" "${BACKUP_S3_URI%/}/$(basename "$OUT_FILE")"
+  fi
 fi
 
 find "$BACKUP_DIR" -type f -name "${PG_DB}_*.sql.gz" -mtime +"$RETENTION_DAYS" -delete

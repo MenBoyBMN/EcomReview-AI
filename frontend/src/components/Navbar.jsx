@@ -11,6 +11,8 @@ import {
   MoreHorizontal,
   BellRing,
   LogOut,
+  Users,
+  CreditCard,
 } from 'lucide-react';
 import { SCENARIO_OPTIONS } from '../constants/taxonomy';
 import {
@@ -30,6 +32,8 @@ export default function Navbar({
   currentUser = null,
   onLogout,
   onOpenAlertSettings,
+  onOpenTeamModal,
+  onOpenBillingModal,
   darkMode,
   onToggleDark,
   onRefreshAll,
@@ -262,7 +266,35 @@ export default function Navbar({
                     className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <BellRing className="w-4 h-4 text-amber-500" />
-                    <span>Cảnh báo Telegram / Webhook</span>
+                    <span>Cảnh báo, Sàn & Brand Voice</span>
+                  </button>
+                )}
+
+                {!isCskhOnly && onOpenTeamModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenTeamModal();
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Users className="w-4 h-4 text-indigo-500" />
+                    <span>Đội ngũ CSKH & Gian hàng</span>
+                  </button>
+                )}
+
+                {!isCskhOnly && onOpenBillingModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenBillingModal();
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <CreditCard className="w-4 h-4 text-emerald-500" />
+                    <span>Gói cước & Hạn mức</span>
                   </button>
                 )}
 

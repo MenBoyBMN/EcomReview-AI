@@ -4,6 +4,7 @@ import { api, IS_PRODUCTION_APP } from './api/client';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
 import Navbar from './components/Navbar';
 import OverviewTab from './components/OverviewTab';
+import ExecutiveDashboardTab from './components/ExecutiveDashboardTab';
 import InsightsAlertsTab from './components/InsightsAlertsTab';
 import ActionsTab from './components/ActionsTab';
 import ReviewsCskhTab from './components/ReviewsCskhTab';
@@ -11,6 +12,8 @@ import EvidenceModal from './components/EvidenceModal';
 import UploadModal from './components/UploadModal';
 import LoginView from './components/LoginView';
 import AlertSettingsModal from './components/AlertSettingsModal';
+import TeamManagementModal from './components/TeamManagementModal';
+import BillingModal from './components/BillingModal';
 
 const VALID_TAB_IDS = new Set(NAV_ITEMS.map((item) => item.id));
 
@@ -47,6 +50,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [pilotShops, setPilotShops] = useState([]);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+  const [billingModalOpen, setBillingModalOpen] = useState(false);
 
   // Core data states
   const [health, setHealth] = useState(null);
@@ -305,6 +310,8 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onOpenAlertSettings={() => setAlertModalOpen(true)}
+          onOpenTeamModal={() => setTeamModalOpen(true)}
+          onOpenBillingModal={() => setBillingModalOpen(true)}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
           onRefreshAll={() => {
@@ -332,6 +339,16 @@ export default function App() {
               onRetry={loadScenarioData}
               darkMode={darkMode}
               onNavigateReviewsWithAspect={handleNavigateReviewsWithAspect}
+            />
+          )}
+
+          {activeTab === 'executive' && (
+            <ExecutiveDashboardTab
+              onSelectShop={(slug) => {
+                handleScenarioChange(slug);
+                handleSelectTab('overview');
+              }}
+              showToast={showToast}
             />
           )}
 
@@ -410,6 +427,23 @@ export default function App() {
         scenarioTag={scenarioTag}
         shopInfo={activeShopInfo}
         onSaved={loadAuthAndShops}
+        showToast={showToast}
+      />
+
+      {/* Team & Workspace Management Modal */}
+      <TeamManagementModal
+        isOpen={teamModalOpen}
+        onClose={() => setTeamModalOpen(false)}
+        pilotShops={pilotShops}
+        onWorkspaceChanged={loadAuthAndShops}
+        showToast={showToast}
+      />
+
+      {/* SaaS Plan & Quota Metering Modal */}
+      <BillingModal
+        isOpen={billingModalOpen}
+        onClose={() => setBillingModalOpen(false)}
+        scenarioTag={scenarioTag}
         showToast={showToast}
       />
 

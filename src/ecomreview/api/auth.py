@@ -15,8 +15,10 @@ import jwt
 logger = logging.getLogger(__name__)
 
 SESSION_COOKIE_NAME = "ecomreview_session"
+REFRESH_COOKIE_NAME = "ecomreview_refresh"
 JWT_ALGORITHM = "HS256"
 DEFAULT_TOKEN_EXPIRE_MINUTES = 720  # 12 hours
+DEFAULT_REFRESH_EXPIRE_DAYS = 14
 PBKDF2_ITERATIONS = 310_000
 MIN_PROD_SECRET_LEN = 32
 
@@ -95,6 +97,7 @@ def create_access_token(
         "name": str(user.get("full_name") or user["email"]),
         "role": str(user.get("role") or "owner").lower(),
         "allowed_shops": list(user.get("allowed_shops") or []),
+        "tv": int(user.get("token_version") or 1),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=max(5, ttl))).timestamp()),
     }
@@ -109,6 +112,27 @@ def decode_access_token(token: str) -> dict[str, Any]:
         algorithms=[JWT_ALGORITHM],
         options={"require": ["sub", "email", "role", "exp"]},
     )
+
+
+def hash_token(raw_token: str) -> str:
+    """Compute SHA-256 hex digest for storing opaque refresh tokens safely."""
+    return hashlib.sha256((raw_token or "").encode("utf-8")).hexdigest()
+
+
+def generate_refresh_token() -> tuple[str, str]:
+    """Generate a high-entropy opaque refresh token and its SHA-256 hash."""
+    raw = secrets.token_urlsafe(48)
+    return raw, hash_token(raw)
+
+
+def refresh_token_expiry_iso(days: int | None = None) -> str:
+    """Return UTC ISO-8601 expiration timestamp for a newly minted refresh token."""
+    ttl_days = (
+        days
+        if days is not None
+        else int(os.getenv("ECOMREVIEW_REFRESH_EXPIRE_DAYS", str(DEFAULT_REFRESH_EXPIRE_DAYS)))
+    )
+    return (datetime.now(timezone.utc) + timedelta(days=max(1, ttl_days))).isoformat()
 
 
 # CreBy: MenBoyBMN

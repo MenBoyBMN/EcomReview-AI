@@ -8,6 +8,24 @@ const DEFAULT_ENV_MODE = IS_PRODUCTION_APP
   : import.meta.env.VITE_CONNECTION_MODE || 'auto';
 
 let runtimeStandbyActive = false;
+let inFlightRefreshPromise = null;
+
+async function tryRefreshSession(baseUrl) {
+  if (!inFlightRefreshPromise) {
+    inFlightRefreshPromise = fetch(`${baseUrl}/api/v1/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        inFlightRefreshPromise = null;
+      });
+  }
+  return inFlightRefreshPromise;
+}
 
 export function getConnectionConfig() {
   if (IS_PRODUCTION_APP) {
@@ -79,7 +97,19 @@ async function rawFetchJson(path, options = {}) {
   const isJson = contentType.includes('application/json');
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (
+      response.status === 401 &&
+      !options._retried &&
+      !path.startsWith('/api/v1/auth/login') &&
+      !path.startsWith('/api/v1/auth/refresh') &&
+      !path.startsWith('/api/v1/auth/logout')
+    ) {
+      const refreshed = await tryRefreshSession(baseUrl);
+      if (refreshed) {
+        return rawFetchJson(path, { ...options, _retried: true });
+      }
+      window.dispatchEvent(new CustomEvent('ecomreview:unauthorized'));
+    } else if (response.status === 401) {
       window.dispatchEvent(new CustomEvent('ecomreview:unauthorized'));
     }
     // When Vite proxy cannot reach 127.0.0.1:8000 or static host has no /api route,
@@ -161,6 +191,21 @@ export const api = {
       method: 'POST',
     }),
 
+  refreshSession: () =>
+    rawFetchJson('/api/v1/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  changePassword: (currentPassword, newPassword) =>
+    rawFetchJson('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    }),
+
   getMe: () => rawFetchJson('/api/v1/auth/me'),
 
   getShops: () =>
@@ -169,15 +214,114 @@ export const api = {
       () => ({ count: 0, shops: [] })
     ),
 
+  getIndustries: () =>
+    callWithPolicy(
+      () => rawFetchJson('/api/v1/industries'),
+      () => ({ industries: [{ industry: 'raincoat', display_name: 'Áo mưa & Đồ đi mưa' }] })
+    ),
+
   updateShopAlerts: (slug, payload) =>
     rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/alerts`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
+  updateShopProfile: (slug, payload) =>
+    rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/profile`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  sendWeeklyDigest: (slug, { force = false, previewOnly = false } = {}) => {
+    const q = new URLSearchParams({
+      force: String(Boolean(force)),
+      preview_only: String(Boolean(previewOnly)),
+    });
+    return rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/digest/send?${q.toString()}`, {
+      method: 'POST',
+    });
+  },
+
   testShopAlerts: (slug) =>
     rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/alerts/test`, {
       method: 'POST',
+    }),
+
+  getShopConnectors: (slug) =>
+    callWithPolicy(
+      () => rawFetchJson(`/api/v1/shops/${encodeURIComponent(slug)}/connectors`),
+      () => ({ scenario_tag: slug, supported_platforms: ['shopee', 'tiktok'], connections: [], platforms: {} })
+    ),
+
+  authorizeShopConnector: (slug, platform, redirectUrl) =>
+    rawFetchJson(
+      `/api/v1/shops/${encodeURIComponent(slug)}/connectors/${encodeURIComponent(platform)}/authorize`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ redirect_url: redirectUrl }),
+      }
+    ),
+
+  saveManualConnector: (slug, platform, payload) =>
+    rawFetchJson(
+      `/api/v1/shops/${encodeURIComponent(slug)}/connectors/${encodeURIComponent(platform)}/manual`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  disconnectShopConnector: (slug, platform) =>
+    rawFetchJson(
+      `/api/v1/shops/${encodeURIComponent(slug)}/connectors/${encodeURIComponent(platform)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  syncShopConnector: (slug, platform, payload = {}) =>
+    rawFetchJson(
+      `/api/v1/shops/${encodeURIComponent(slug)}/connectors/${encodeURIComponent(platform)}/sync`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  retryPushReply: (replyId) =>
+    rawFetchJson(`/api/v1/reviews/replies/${replyId}/retry-push`, {
+      method: 'POST',
+    }),
+
+  getSkuBreakdown: (scenarioTag = 'real_shop', platform = '', minN = 2, limit = 20) => {
+    const q = new URLSearchParams({
+      scenario_tag: scenarioTag,
+      min_n: String(minN),
+      limit: String(limit),
+    });
+    if (platform) q.set('platform', platform);
+    return callWithPolicy(
+      () => rawFetchJson(`/api/v1/stats/sku-breakdown?${q.toString()}`),
+      () => ({ scenario_tag: scenarioTag, count: 0, items: [] })
+    );
+  },
+
+  bulkCreateReplyDrafts: (payload) =>
+    rawFetchJson('/api/v1/reviews/bulk-reply-draft', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  bulkUpdateReplyStatus: (payload) =>
+    rawFetchJson('/api/v1/reviews/replies/bulk-status', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  triggerAutoReply5Star: (payload) =>
+    rawFetchJson('/api/v1/reviews/auto-reply-5star', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   markActionImplemented: (actionId, implementedAt = null) =>
@@ -187,6 +331,74 @@ export const api = {
         ...(implementedAt ? { implemented_at: implementedAt } : {}),
       }),
     }),
+
+  // Phase 3B: Agency Executive, Owner Team Management, Trial & Billing Quota
+  getExecutiveSummary: () =>
+    callWithPolicy(
+      () => rawFetchJson('/api/v1/executive/summary'),
+      () => ({
+        portfolio: {
+          total_shops: 0,
+          total_reviews: 0,
+          portfolio_avg_rating: 0,
+          portfolio_neg_rate_pct: 0,
+          portfolio_cskh_sla_pct: 100,
+          total_pending_cskh: 0,
+          total_pending_actions: 0,
+        },
+        channel_summary: {
+          shopee: { reviews: 0, avg_rating: 0, neg_rate_pct: 0 },
+          tiktok: { reviews: 0, avg_rating: 0, neg_rate_pct: 0 },
+        },
+        shops: [],
+      })
+    ),
+
+  getTeamUsers: () =>
+    callWithPolicy(
+      () => rawFetchJson('/api/v1/team/users'),
+      () => ({ count: 0, users: [] })
+    ),
+
+  createTeamUser: (payload) =>
+    rawFetchJson('/api/v1/team/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateTeamUserStatus: (userId, isActive) =>
+    rawFetchJson(`/api/v1/team/users/${userId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: Boolean(isActive) }),
+    }),
+
+  createWorkspaceShop: (payload) =>
+    rawFetchJson('/api/v1/workspace/shops', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  registerTrial: (payload) =>
+    rawFetchJson('/api/v1/auth/register-trial', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getBillingUsage: (scenarioTag = '', monthKey = '') => {
+    const q = new URLSearchParams();
+    if (scenarioTag) q.set('scenario_tag', scenarioTag);
+    if (monthKey) q.set('month_key', monthKey);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return callWithPolicy(
+      () => rawFetchJson(`/api/v1/billing/usage${qs}`),
+      () => ({
+        month_key: '',
+        subscription: { plan_code: 'basic', status: 'ACTIVE', monthly_llm_review_limit: 2000, max_shops: 2, max_users: 3 },
+        usage: { llm_reviews_used: 0, rule_reviews_used: 0, replies_generated: 0, llm_usage_pct: 0, shops_used: 1, users_used: 1 },
+        plans: [],
+      })
+    );
+  },
 
   // 1. GET /api/v1/health
   getHealth: () =>
@@ -330,6 +542,7 @@ export const api = {
     platform = '',
     aspect = '',
     polarity = '',
+    anomalyOnly = false,
     reviewIds = '',
     limit = 50,
     offset = 0,
@@ -342,6 +555,7 @@ export const api = {
     if (platform) q.set('platform', platform);
     if (aspect) q.set('aspect', aspect);
     if (polarity) q.set('polarity', polarity);
+    if (anomalyOnly) q.set('anomaly_only', 'true');
     if (reviewIds) q.set('review_ids', reviewIds);
     return callWithPolicy(
       () => rawFetchJson(`/api/v1/reviews?${q.toString()}`),

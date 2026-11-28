@@ -12,13 +12,16 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors
 
+from ecomreview.analyze.cache_store import ABSAAnalysisCache
 from ecomreview.llm_provider import DEFAULT_GEMINI_MODEL, resolve_gemini_pool
 from ecomreview.normalize import normalize_social_text
 from ecomreview.schemas import Polarity, ReviewAnalysis
@@ -72,22 +75,25 @@ class A1GeminiAnalyzer:
         prompt_version: str = "v2",
         max_retries: int = 3,
         quota_cooldown_sec: float = 120.0,
+        redis_client: Any = None,
     ):
         effective_model, self.model_pool = resolve_gemini_pool(model_id)
         self.model_id = effective_model
         self.prompt_path = _resolve_repo_path(prompt_path)
         self.cache_dir = _resolve_repo_path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_store = ABSAAnalysisCache(cache_dir=self.cache_dir, redis_client=redis_client)
         self.enable_norm = enable_norm
         self.prompt_version = prompt_version
         self.max_retries = max_retries
         self.quota_cooldown_sec = quota_cooldown_sec
         self.fallback_on_quota: bool = True
+        self._state_lock = threading.Lock()
+        self._tls = threading.local()
         self._quota_exhausted_until: float = 0.0
         self._exhausted_models: set[str] = set()
         self._model_cooldown_until: dict[str, float] = {}
         self._call_counter: int = 0
-        self.last_used_fallback: bool = False
         self._rule_analyzer = None
 
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
@@ -99,22 +105,38 @@ class A1GeminiAnalyzer:
             self.system_prompt = "You are an expert ABSA sentiment analyzer for e-commerce."
 
     @property
+    def last_used_fallback(self) -> bool:
+        """Thread-local flag indicating whether the current thread fell back to B1."""
+        return bool(getattr(self._tls, "last_used_fallback", False))
+
+    @last_used_fallback.setter
+    def last_used_fallback(self, value: bool) -> None:
+        self._tls.last_used_fallback = bool(value)
+
+    @property
     def quota_exhausted(self) -> bool:
         """Return True while the global quota circuit-breaker cooldown is active."""
-        return time.monotonic() < self._quota_exhausted_until
+        with self._state_lock:
+            return time.monotonic() < self._quota_exhausted_until
 
     @quota_exhausted.setter
     def quota_exhausted(self, value: bool) -> None:
-        self._quota_exhausted_until = time.monotonic() + self.quota_cooldown_sec if value else 0.0
+        with self._state_lock:
+            self._quota_exhausted_until = (
+                time.monotonic() + self.quota_cooldown_sec if value else 0.0
+            )
 
     @property
     def client(self) -> genai.Client:
-        """Lazy initialization of Google GenAI client."""
-        if self._client is None:
-            if not self.api_key:
-                raise ValueError("GEMINI_API_KEY is not configured in environment or constructor.")
-            self._client = genai.Client(api_key=self.api_key, http_options={"timeout": 15000})
-        return self._client
+        """Lazy thread-safe initialization of Google GenAI client."""
+        with self._state_lock:
+            if self._client is None:
+                if not self.api_key:
+                    raise ValueError(
+                        "GEMINI_API_KEY is not configured in environment or constructor."
+                    )
+                self._client = genai.Client(api_key=self.api_key, http_options={"timeout": 15000})
+            return self._client
 
     def _compute_cache_key(self, text: str) -> str:
         """Generate deterministic SHA-256 hash key for caching."""
@@ -133,9 +155,11 @@ class A1GeminiAnalyzer:
         from ecomreview.analyze.b1_rule import B1RuleAnalyzer
 
         self.last_used_fallback = True
-        if self._rule_analyzer is None:
-            self._rule_analyzer = B1RuleAnalyzer(enable_norm=self.enable_norm)
-        fallback_res = self._rule_analyzer.analyze_review(text)
+        with self._state_lock:
+            if self._rule_analyzer is None:
+                self._rule_analyzer = B1RuleAnalyzer(enable_norm=self.enable_norm)
+            rule_analyzer = self._rule_analyzer
+        fallback_res = rule_analyzer.analyze_review(text)
         return self._post_validate_evidence(fallback_res, text, norm_text)
 
     def analyze_review(self, text: str) -> ReviewAnalysis:
@@ -150,9 +174,8 @@ class A1GeminiAnalyzer:
 
         norm_text = normalize_social_text(text, enable=self.enable_norm)
         cache_key = self._compute_cache_key(text)
-        cache_file = self.cache_dir / f"gemini_{cache_key}.json"
 
-        # 1. Check local SHA-256 cache (including equivalent clean-text cache keys)
+        # 1. Check shared Redis + local SHA-256 cache
         candidate_keys = [cache_key]
         clean = text.strip()
         if norm_text.strip() == clean:
@@ -166,21 +189,15 @@ class A1GeminiAnalyzer:
             candidate_keys.append(alt_v1)
 
         for ck in dict.fromkeys(candidate_keys):
-            cand_file = self.cache_dir / f"gemini_{ck}.json"
-            if cand_file.exists():
+            cached_data = self.cache_store.get(ck)
+            if cached_data is not None:
                 try:
-                    cached_data = json.loads(cand_file.read_text(encoding="utf-8"))
                     analysis = ReviewAnalysis.model_validate(cached_data)
-                    if ck != cache_key and not cache_file.exists():
-                        cache_file.write_text(
-                            json.dumps(
-                                analysis.model_dump(mode="json"), ensure_ascii=False, indent=2
-                            ),
-                            encoding="utf-8",
-                        )
+                    if ck != cache_key:
+                        self.cache_store.set(cache_key, analysis.model_dump(mode="json"))
                     return self._post_validate_evidence(analysis, text, norm_text)
                 except Exception as e:
-                    logger.warning("Cache read failed for key %s: %s.", ck, e)
+                    logger.warning("Cache validation failed for key %s: %s.", ck, e)
 
         # Fast circuit-breaker if ALL models in pool are in cooldown or API key is not configured
         if (self.quota_exhausted or not self.api_key) and self.fallback_on_quota:
@@ -202,19 +219,20 @@ class A1GeminiAnalyzer:
         last_error: Exception | None = None
         now_mono = time.monotonic()
 
-        active_pool = [
-            m
-            for m in self.model_pool
-            if m not in self._exhausted_models
-            and self._model_cooldown_until.get(m, 0.0) <= now_mono
-        ]
-        if not active_pool:
-            active_pool = [m for m in self.model_pool if m not in self._exhausted_models]
-        if not active_pool:
-            active_pool = list(self.model_pool)
+        with self._state_lock:
+            active_pool = [
+                m
+                for m in self.model_pool
+                if m not in self._exhausted_models
+                and self._model_cooldown_until.get(m, 0.0) <= now_mono
+            ]
+            if not active_pool:
+                active_pool = [m for m in self.model_pool if m not in self._exhausted_models]
+            if not active_pool:
+                active_pool = list(self.model_pool)
 
-        start_idx = self._call_counter % len(active_pool)
-        self._call_counter += 1
+            start_idx = self._call_counter % len(active_pool)
+            self._call_counter += 1
         rotated_pool = active_pool[start_idx:] + active_pool[:start_idx]
 
         for model_cand in rotated_pool:
@@ -236,7 +254,8 @@ class A1GeminiAnalyzer:
                     last_error = e
                     err_str = str(e)
                     if "404" in err_str or "NOT_FOUND" in err_str:
-                        self._exhausted_models.add(model_cand)
+                        with self._state_lock:
+                            self._exhausted_models.add(model_cand)
                         break
                     if (
                         "RESOURCE_EXHAUSTED" in err_str
@@ -247,7 +266,8 @@ class A1GeminiAnalyzer:
                             "Rate/quota limit on model %s. Cooling down 60s and switching model...",
                             model_cand,
                         )
-                        self._model_cooldown_until[model_cand] = time.monotonic() + 60.0
+                        with self._state_lock:
+                            self._model_cooldown_until[model_cand] = time.monotonic() + 60.0
                         break
                     wait_time = delays[attempt]
                     logger.warning(
@@ -288,11 +308,8 @@ class A1GeminiAnalyzer:
                 return self._fallback_b1(text, norm_text)
             raise RuntimeError(f"Invalid Gemini JSON response: {exc}") from exc
 
-        # 5. Persist genuine Gemini response to cache
-        cache_file.write_text(
-            json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        # 5. Persist genuine Gemini response to shared Redis + disk cache
+        self.cache_store.set(cache_key, analysis.model_dump(mode="json"))
 
         # 6. Post-validate evidence fidelity
         return self._post_validate_evidence(analysis, text, norm_text)
